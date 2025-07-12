@@ -22,7 +22,7 @@ describe('CSVExporter', () => {
 
       expect(lines).toHaveLength(2); // Header + 1 data row
       expect(lines[0]).toBe(
-        'company_id,company_name,success,smp_hostname,as4_endpoint_url,technical_contact_url,technical_info_url,error_message,processed_at'
+        'company_id,company_name,success,smp_hostname,as4_endpoint_url,technical_contact_url,technical_info_url,service_description,error_message,processed_at'
       );
       expect(lines[1]).toContain('0843766574'); // company_id without scheme
       expect(lines[1]).toContain('true');
