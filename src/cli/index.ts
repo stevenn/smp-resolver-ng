@@ -73,56 +73,11 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     participantId = `${options.scheme}:${participantId}`;
   }
 
-  let result: any;
-
-  if (options.all || (options.verbose && options.businessCard)) {
-    // Combined mode: fetch everything
-    result = await resolver.resolve(participantId, {
-      fetchDocumentTypes: true,
-      includeBusinessCard: true
-    });
-
-    // Also fetch endpoint details
-    if (result.isRegistered) {
-      try {
-        const endpointInfo = await resolver.getEndpointUrls(participantId);
-        result.endpointDetails = endpointInfo;
-      } catch {
-        // Continue even if endpoint fetch fails
-      }
-    }
-  } else if (options.businessCard) {
-    // Business card only
-    try {
-      const businessCard = await resolver.getBusinessCard(participantId);
-      result = {
-        participantId,
-        isRegistered: true,
-        businessCard
-      };
-    } catch (error: unknown) {
-      result = {
-        participantId,
-        isRegistered: false,
-        error: error instanceof Error ? error.message : String(error)
-      };
-    }
-  } else {
-    // Standard resolution
-    result = await resolver.resolve(participantId, {
-      fetchDocumentTypes: options.verbose
-    });
-
-    // If verbose mode, also fetch endpoint URLs
-    if (options.verbose && result.isRegistered) {
-      try {
-        const endpointInfo = await resolver.getEndpointUrls(participantId);
-        result.endpointDetails = endpointInfo;
-      } catch {
-        // Continue even if endpoint fetch fails
-      }
-    }
-  }
+  // Resolve with appropriate options based on flags
+  const result = await resolver.resolve(participantId, {
+    fetchDocumentTypes: options.verbose || options.all,
+    includeBusinessCard: options.businessCard || options.all
+  });
 
   if (options.quiet) {
     console.log(result.isRegistered ? 'registered' : 'not registered');
@@ -133,11 +88,11 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     const batchResult = {
       participantId,
       success: result.isRegistered,
-      smpHostname: 'endpointInfo' in result ? result.endpointInfo?.smpHostname : undefined,
-      as4EndpointUrl: undefined,
-      technicalContactUrl: undefined,
-      technicalInfoUrl: undefined,
-      serviceDescription: undefined,
+      smpHostname: result.smpHostname,
+      as4EndpointUrl: result.endpoint?.url,
+      technicalContactUrl: result.endpoint?.technicalContactUrl,
+      technicalInfoUrl: result.endpoint?.technicalInformationUrl,
+      serviceDescription: result.endpoint?.serviceDescription,
       errorMessage: result.error,
       processedAt: new Date()
     };

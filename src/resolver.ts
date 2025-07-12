@@ -111,11 +111,19 @@ export class SMPResolver {
       // Fetch service metadata
       const serviceMetadata = await this.fetchServiceMetadata(smpUrl, participantId);
 
+      // Extract endpoint info first
+      const endpointInfo = await this.extractEndpointInfo(serviceMetadata, smpUrl, participantId);
+
       // Build response based on options
       const result: ParticipantInfo = {
         participantId,
         isRegistered: true
       };
+
+      // Include SMP hostname if verbose mode
+      if (options?.fetchDocumentTypes || options?.includeBusinessCard) {
+        result.smpHostname = endpointInfo.smpHostname;
+      }
 
       // Include document types if requested
       if (options?.fetchDocumentTypes) {
@@ -124,16 +132,19 @@ export class SMPResolver {
         );
       }
 
-      if (options?.includeBusinessCard) {
-        result.businessCard = await this.getBusinessCard(participantId, options);
+      // Include endpoint details if verbose mode
+      if (options?.fetchDocumentTypes && endpointInfo.endpoint) {
+        result.endpoint = endpointInfo.endpoint;
       }
 
-      // Extract endpoint info (fetch first document's metadata for endpoints)
-      result.endpointInfo = await this.extractEndpointInfo(serviceMetadata, smpUrl, participantId);
-      
-      // Include service description at the top level if available
-      if (result.endpointInfo?.endpoint?.serviceDescription) {
-        result.serviceDescription = result.endpointInfo.endpoint.serviceDescription;
+      // Include business entity if requested
+      if (options?.includeBusinessCard) {
+        try {
+          const businessCard = await this.getBusinessCard(participantId, options);
+          result.businessEntity = businessCard.entity;
+        } catch {
+          // Business card is optional, continue without it
+        }
       }
 
       return result;
@@ -150,14 +161,20 @@ export class SMPResolver {
    * Gets business card information (peppolcheck compatibility)
    */
   async getBusinessCard(participantId: string, _options?: ResolveOptions): Promise<BusinessCard> {
-    // First resolve to get SMP URL
-    const info = await this.resolve(participantId);
+    // Get SMP URL via DNS
+    const [scheme, value] = participantId.split(':');
+    if (!scheme || !value) {
+      throw new Error('Invalid participant ID format');
+    }
 
-    if (!info.isRegistered || !info.endpointInfo) {
+    const hash = hashParticipantId(value, scheme);
+    const smpUrl = await this.naptrResolver.lookupSMP(hash, this.config.smlDomain);
+
+    if (!smpUrl) {
       throw new Error('Participant not registered');
     }
 
-    const smpHostname = info.endpointInfo.smpHostname;
+    const smpHostname = new URL(smpUrl).hostname;
     const baseUrl = `http://${smpHostname}`; // Most SMPs use HTTP
 
     // Try to fetch business card XML
@@ -175,12 +192,8 @@ export class SMPResolver {
           }
         ]
       },
-      documentTypes: [],
-      endpoints: [],
       smpHostname
     };
-
-    // Don't include document types or endpoints in business card - keep it focused on entity info
 
     return businessCard;
   }
@@ -420,7 +433,9 @@ export class SMPResolver {
       try {
         // Construct URL for first document type
         const docType = metadata.documentTypes[0];
-        const encodedDocId = encodeURIComponent(docType.documentIdentifier.value);
+        // Include the scheme in the document identifier
+        const fullDocId = `${docType.documentIdentifier.scheme}::${docType.documentIdentifier.value}`;
+        const encodedDocId = encodeURIComponent(fullDocId);
         const metadataUrl = `${smpUrl}/iso6523-actorid-upis::${participantId}/services/${encodedDocId}`;
         
         const response = await this.redirectHandler.followRedirects(metadataUrl);

@@ -73,17 +73,7 @@ export interface BusinessEntity {
 
 export interface BusinessCard {
   entity: BusinessEntity;
-  documentTypes: Array<{
-    documentId: string;
-    friendlyName: string;
-  }>;
-  endpoints: Array<{
-    transportProfile: string;
-    endpointUrl: string;
-    technicalContactUrl?: string;
-    technicalInformationUrl?: string;
-  }>;
-  smpHostname?: string;
+  smpHostname: string;
 }
 
 export interface EndpointInfo {
@@ -100,10 +90,16 @@ export interface EndpointInfo {
 export interface ParticipantInfo {
   participantId: string;
   isRegistered: boolean;
-  businessCard?: BusinessCard;
-  endpointInfo?: EndpointInfo;
+  smpHostname?: string;
   documentTypes?: string[];
-  serviceDescription?: string;
+  endpoint?: {
+    url: string;
+    transportProfile: string;
+    serviceDescription?: string;
+    technicalContactUrl?: string;
+    technicalInformationUrl?: string;
+  };
+  businessEntity?: BusinessEntity;
   error?: string;
 }
 
