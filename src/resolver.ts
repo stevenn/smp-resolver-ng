@@ -1,0 +1,584 @@
+import { NAPTRResolver } from './dns/naptr-resolver.js';
+import { HTTPClient } from './http/http-client.js';
+import { RedirectHandler } from './http/redirect-handler.js';
+import { XMLParser } from './xml/parser.js';
+import { hashParticipantId, normalizeBelgianIdentifier } from './sml/participant-hash.js';
+import type {
+  SMPResolverConfig,
+  ParticipantInfo,
+  BusinessCard,
+  BusinessEntity,
+  EndpointInfo,
+  BatchResult,
+  ResolveOptions,
+  BatchOptions,
+  ServiceMetadata,
+  DocumentType,
+  ServiceEndpoint
+} from './types/index.js';
+
+export class SMPResolver {
+  private config: Required<SMPResolverConfig>;
+  private naptrResolver: NAPTRResolver;
+  private httpClient: HTTPClient;
+  private redirectHandler: RedirectHandler;
+  private xmlParser: XMLParser;
+
+  constructor(config: SMPResolverConfig = {}) {
+    this.config = {
+      smlDomain: config.smlDomain ?? 'edelivery.tech.ec.europa.eu',
+      dnsServers: config.dnsServers ?? [],
+      httpTimeout: config.httpTimeout ?? 30000,
+      cacheTTL: config.cacheTTL ?? 3600,
+      userAgent: config.userAgent ?? 'smp-resolver-ng/1.0.0'
+    };
+
+    this.naptrResolver = new NAPTRResolver({
+      dnsServers: this.config.dnsServers,
+      timeout: 5000
+    });
+
+    this.httpClient = new HTTPClient({
+      timeout: this.config.httpTimeout,
+      userAgent: this.config.userAgent
+    });
+
+    this.redirectHandler = new RedirectHandler(this.httpClient);
+    this.xmlParser = new XMLParser();
+  }
+
+  /**
+   * Resolves a participant with automatic Belgian scheme detection
+   */
+  async resolveParticipant(identifier: string): Promise<ParticipantInfo> {
+    const normalized = normalizeBelgianIdentifier(identifier);
+
+    // Try KBO scheme first
+    if (normalized.kboParticipantId) {
+      try {
+        const result = await this.resolve(normalized.kboParticipantId);
+        if (result.isRegistered) {
+          return result;
+        }
+      } catch (error) {
+        // Continue to VAT scheme
+      }
+    }
+
+    // Try VAT scheme
+    if (normalized.vatParticipantId) {
+      try {
+        const result = await this.resolve(normalized.vatParticipantId);
+        if (result.isRegistered) {
+          return result;
+        }
+      } catch (error) {
+        // Both failed
+      }
+    }
+
+    return {
+      participantId: identifier,
+      isRegistered: false,
+      error: 'Participant not found in any Belgian scheme'
+    };
+  }
+
+  /**
+   * Core resolution method
+   */
+  async resolve(participantId: string, options?: ResolveOptions): Promise<ParticipantInfo> {
+    try {
+      // Parse participant ID
+      const [scheme, value] = participantId.split(':');
+      if (!scheme || !value) {
+        throw new Error('Invalid participant ID format. Expected: scheme:value');
+      }
+
+      // Hash participant ID with scheme for canonical form
+      const hash = hashParticipantId(value, scheme);
+
+      // DNS lookup
+      const smpUrl = await this.naptrResolver.lookupSMP(hash, this.config.smlDomain);
+      if (!smpUrl) {
+        return {
+          participantId,
+          isRegistered: false,
+          error: 'No SMP found via DNS lookup'
+        };
+      }
+
+      // Fetch service metadata
+      const serviceMetadata = await this.fetchServiceMetadata(smpUrl, participantId);
+
+      // Build response based on options
+      const result: ParticipantInfo = {
+        participantId,
+        isRegistered: true
+      };
+
+      // Include document types if requested
+      if (options?.fetchDocumentTypes) {
+        result.documentTypes = serviceMetadata.documentTypes.map(
+          dt => dt.friendlyName || dt.documentIdentifier.value
+        );
+      }
+
+      if (options?.includeBusinessCard) {
+        result.businessCard = await this.getBusinessCard(participantId, options);
+      }
+
+      result.endpointInfo = this.extractEndpointInfo(serviceMetadata, smpUrl);
+
+      return result;
+    } catch (error: any) {
+      return {
+        participantId,
+        isRegistered: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Gets business card information (peppolcheck compatibility)
+   */
+  async getBusinessCard(participantId: string, options?: ResolveOptions): Promise<BusinessCard> {
+    // First resolve to get SMP URL
+    const info = await this.resolve(participantId);
+
+    if (!info.isRegistered || !info.endpointInfo) {
+      throw new Error('Participant not registered');
+    }
+
+    const smpHostname = info.endpointInfo.smpHostname;
+    const baseUrl = `http://${smpHostname}`; // Most SMPs use HTTP
+
+    // Try to fetch business card XML
+    const businessEntity = await this.fetchBusinessCardXML(participantId, baseUrl);
+
+    // Build business card response
+    const businessCard: BusinessCard = {
+      entity: businessEntity || {
+        name: 'Unknown',
+        countryCode: 'BE',
+        identifiers: [
+          {
+            scheme: participantId.split(':')[0],
+            value: participantId.split(':')[1]
+          }
+        ]
+      },
+      documentTypes: [],
+      endpoints: [],
+      smpHostname
+    };
+
+    // Don't include document types or endpoints in business card - keep it focused on entity info
+
+    return businessCard;
+  }
+
+  /**
+   * Gets endpoint URLs only (bulk processor compatibility)
+   */
+  async getEndpointUrls(participantId: string): Promise<EndpointInfo> {
+    try {
+      // Parse participant ID
+      const [scheme, value] = participantId.split(':');
+      if (!scheme || !value) {
+        throw new Error('Invalid participant ID format');
+      }
+
+      // Get SMP URL via DNS
+      const hash = hashParticipantId(value, scheme);
+      const smpUrl = await this.naptrResolver.lookupSMP(hash, this.config.smlDomain);
+
+      if (!smpUrl) {
+        throw new Error('No SMP found via DNS lookup');
+      }
+
+      // Fetch ServiceGroup to get document references
+      const serviceGroupUrl = `${smpUrl}/iso6523-actorid-upis::${participantId}`;
+      const response = await this.redirectHandler.followRedirects(serviceGroupUrl);
+
+      if (response.statusCode !== 200) {
+        throw new Error(`SMP returned status ${response.statusCode}`);
+      }
+
+      // Parse ServiceGroup
+      const serviceGroup = this.xmlParser.parseServiceGroup(response.body);
+
+      // Extract hostname
+      const smpHostname = new URL(smpUrl).hostname;
+      let endpointData: EndpointInfo['endpoint'] = undefined;
+
+      // Fetch first document type's metadata to get endpoints
+      if (serviceGroup.serviceReferences.length > 0) {
+        try {
+          const metadataUrl = serviceGroup.serviceReferences[0];
+          const metadataResponse = await this.redirectHandler.followRedirects(metadataUrl);
+
+          if (metadataResponse.statusCode === 200) {
+            const metadata = this.xmlParser.parseServiceMetadata(metadataResponse.body);
+
+            // Get first endpoint from first process of first document type
+            if (metadata.documentTypes.length > 0) {
+              const docType = metadata.documentTypes[0];
+              if (docType.processes.length > 0) {
+                const process = docType.processes[0];
+                if (process.endpoints.length > 0) {
+                  const endpoint = process.endpoints[0];
+                  endpointData = {
+                    url: endpoint.endpointUrl,
+                    transportProfile: endpoint.transportProfile,
+                    technicalContactUrl: endpoint.technicalContactUrl,
+                    technicalInformationUrl: endpoint.technicalInformationUrl
+                  };
+                }
+              }
+            }
+          }
+        } catch (error) {
+          // Continue even if metadata fetch fails
+        }
+      }
+
+      return { smpHostname, endpoint: endpointData };
+    } catch (error: any) {
+      throw new Error(`Failed to get endpoint URLs: ${error.message}`);
+    }
+  }
+
+  /**
+   * Batch processing support
+   */
+  async resolveBatch(participantIds: string[], options?: BatchOptions): Promise<BatchResult[]> {
+    const concurrency = options?.concurrency ?? 20;
+    const results: BatchResult[] = [];
+
+    // Process in chunks
+    for (let i = 0; i < participantIds.length; i += concurrency) {
+      const chunk = participantIds.slice(i, i + concurrency);
+      const chunkPromises = chunk.map(async participantId => {
+        try {
+          const info = await this.getEndpointUrls(participantId);
+
+          return {
+            participantId,
+            success: true,
+            smpHostname: info.smpHostname,
+            as4EndpointUrl: info.endpoint?.url,
+            technicalContactUrl: info.endpoint?.technicalContactUrl,
+            technicalInfoUrl: info.endpoint?.technicalInformationUrl,
+            processedAt: new Date()
+          };
+        } catch (error: any) {
+          return {
+            participantId,
+            success: false,
+            errorMessage: error.message,
+            processedAt: new Date()
+          };
+        }
+      });
+
+      const chunkResults = await Promise.all(chunkPromises);
+      results.push(...chunkResults);
+
+      // Progress callback
+      if (options?.onProgress) {
+        options.onProgress(results.length, participantIds.length);
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Fetches service metadata from SMP
+   */
+  private async fetchServiceMetadata(
+    smpUrl: string,
+    participantId: string
+  ): Promise<ServiceMetadata> {
+    // Construct ServiceGroup URL with full PEPPOL identifier format
+    const serviceGroupUrl = `${smpUrl}/iso6523-actorid-upis::${participantId}`;
+
+    // Fetch and follow redirects
+    const response = await this.redirectHandler.followRedirects(serviceGroupUrl);
+
+    if (response.statusCode !== 200) {
+      throw new Error(`SMP returned status ${response.statusCode}`);
+    }
+
+    // Parse ServiceGroup
+    const serviceGroup = this.xmlParser.parseServiceGroup(response.body);
+
+    // Extract document types from service references
+    const documentTypes: DocumentType[] = [];
+    for (const refUrl of serviceGroup.serviceReferences) {
+      // Extract document ID from URL
+      // Format: .../services/{encoded-document-id}
+      const match = refUrl.match(/\/services\/(.+)$/);
+      if (match) {
+        const encodedDocId = match[1];
+        const docId = decodeURIComponent(encodedDocId);
+
+        documentTypes.push({
+          documentIdentifier: {
+            scheme: 'busdox-docid-qns',
+            value: docId
+          },
+          friendlyName: this.extractFriendlyDocumentName(docId),
+          processes: []
+        });
+      }
+    }
+
+    return {
+      participantIdentifier: serviceGroup.participantIdentifier,
+      documentTypes,
+      smpUrl
+    };
+  }
+
+  /**
+   * Fetches full metadata including document types
+   */
+  private async fetchFullMetadata(participantId: string): Promise<ServiceMetadata> {
+    const baseInfo = await this.resolve(participantId);
+    if (!baseInfo.isRegistered) {
+      throw new Error('Participant not registered');
+    }
+
+    // This would fetch each document type's metadata
+    // For now, returning mock data structure
+    return {
+      participantIdentifier: {
+        scheme: participantId.split(':')[0],
+        value: participantId.split(':')[1]
+      },
+      documentTypes: []
+    };
+  }
+
+  /**
+   * Extracts endpoint info from service metadata
+   */
+  private extractEndpointInfo(metadata: ServiceMetadata, smpUrl: string): EndpointInfo {
+    // Extract hostname from SMP URL
+    const smpHostname = new URL(smpUrl).hostname;
+
+    // TODO: Implement proper endpoint extraction from ServiceMetadata
+    // This requires fetching each document type's ServiceMetadata
+
+    return {
+      smpHostname,
+      endpoint: undefined
+    };
+  }
+
+  /**
+   * Extracts a friendly name from document identifier
+   */
+  private extractFriendlyDocumentName(documentId: string): string {
+    // Remove scheme prefix if present
+    const withoutScheme = documentId.replace(/^[^:]+::/, '');
+
+    // Handle UBL format: urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##...
+    const ublMatch = withoutScheme.match(/xsd:([^:]+)-\d+::([^#]+)##(.+)$/);
+    if (ublMatch) {
+      const docType = ublMatch[2];
+      const subtype = ublMatch[3];
+      // Extract meaningful part from subtype
+      if (subtype.includes('peppol')) {
+        const peppolMatch = subtype.match(/peppol[^:]*:([^:]+):/);
+        if (peppolMatch) {
+          return `${docType} (PEPPOL ${peppolMatch[1]})`;
+        }
+      }
+      return `${docType} (${subtype})`;
+    }
+
+    // Handle CII format: urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100::...
+    const ciiMatch = withoutScheme.match(/standard:([^:]+):\d+::(.+)$/);
+    if (ciiMatch) {
+      return `${ciiMatch[1]} (${ciiMatch[2]})`;
+    }
+
+    // Fallback: return last meaningful part
+    const parts = withoutScheme.split('::');
+    return parts[parts.length - 1] || documentId;
+  }
+
+  /**
+   * Detects service provider from endpoint URL
+   */
+  private detectServiceProvider(url: string): string | undefined {
+    const hostname = new URL(url).hostname.toLowerCase();
+
+    if (hostname.includes('babelway')) return 'Babelway';
+    if (hostname.includes('tickstar')) return 'TIE Kinetix';
+    if (hostname.includes('basware')) return 'Basware';
+    if (hostname.includes('pagero')) return 'Pagero';
+    if (hostname.includes('storecove')) return 'Storecove';
+    if (hostname.includes('tradeshift')) return 'Tradeshift';
+    if (hostname.includes('seeburger')) return 'Seeburger';
+
+    return undefined;
+  }
+
+  /**
+   * Fetches business card XML from SMP
+   */
+  private async fetchBusinessCardXML(
+    participantId: string,
+    baseUrl: string
+  ): Promise<BusinessEntity | null> {
+    const fullIdentifier = `iso6523-actorid-upis::${participantId}`;
+    const encodedParticipantId = encodeURIComponent(fullIdentifier);
+
+    // Try different business card URL patterns
+    const urlPatterns = [
+      `${baseUrl}/businesscard/${fullIdentifier}`,
+      `${baseUrl}/${encodedParticipantId}/businesscard`,
+      `${baseUrl}/smp/businesscard/${encodedParticipantId}`,
+      `${baseUrl}/api/businesscard/${encodedParticipantId}`,
+      `${baseUrl}/rest/businesscard/${encodedParticipantId}`
+    ];
+
+    for (const url of urlPatterns) {
+      try {
+        const response = await this.redirectHandler.followRedirects(url);
+
+        if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
+          // Parse business card XML
+          return this.parseBusinessCardXML(response.body);
+        }
+      } catch (error) {
+        // Continue trying other URLs
+        continue;
+      }
+    }
+
+    // Also try HTTPS versions if HTTP failed
+    if (!baseUrl.startsWith('https')) {
+      const httpsUrl = baseUrl.replace('http://', 'https://');
+      for (const pattern of urlPatterns) {
+        const url = pattern.replace(baseUrl, httpsUrl);
+        try {
+          const response = await this.redirectHandler.followRedirects(url);
+
+          if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
+            return this.parseBusinessCardXML(response.body);
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Parses business card XML to extract entity information
+   */
+  private parseBusinessCardXML(xml: string): BusinessEntity | null {
+    try {
+      // Extract business entity name
+      const nameMatch = xml.match(/<(?:[\w]+:)?Name[^>]*>([^<]+)</);
+      const name = nameMatch ? nameMatch[1].trim() : 'Unknown';
+
+      // Extract country code
+      const countryMatch = xml.match(/<(?:[\w]+:)?CountryCode[^>]*>([^<]+)</);
+      const countryCode = countryMatch ? countryMatch[1].trim() : 'BE';
+
+      // Extract identifiers
+      const identifiers: Array<{ scheme: string; value: string }> = [];
+      const idRegex = /<(?:[\w]+:)?Identifier[^>]*scheme="([^"]+)"[^>]*>([^<]+)</g;
+      let match;
+
+      while ((match = idRegex.exec(xml)) !== null) {
+        identifiers.push({
+          scheme: match[1],
+          value: match[2].trim()
+        });
+      }
+
+      // If no identifiers found, try to extract from ParticipantIdentifier
+      if (identifiers.length === 0) {
+        const participantMatch = xml.match(
+          /<(?:[\w]+:)?ParticipantIdentifier[^>]*scheme="([^"]+)"[^>]*>([^<]+)</
+        );
+        if (participantMatch) {
+          const fullId = participantMatch[2].trim();
+          const parts = fullId.split(':');
+          if (parts.length === 2) {
+            identifiers.push({
+              scheme: parts[0],
+              value: parts[1]
+            });
+          }
+        }
+      }
+
+      // Extract geographical info
+      const geoMatch = xml.match(/<(?:[\w]+:)?GeographicalInformation[^>]*>([^<]+)</);
+      const geographicalInfo = geoMatch ? geoMatch[1].trim() : undefined;
+
+      // Extract websites
+      const websites: string[] = [];
+      const websiteRegex = /<(?:[\w]+:)?WebsiteURI[^>]*>([^<]+)</g;
+      while ((match = websiteRegex.exec(xml)) !== null) {
+        websites.push(match[1].trim());
+      }
+
+      // Extract contacts
+      const contacts: Array<{ type: string; name?: string; phoneNumber?: string; email?: string }> =
+        [];
+      const contactRegex = /<(?:[\w]+:)?Contact[^>]*>([\s\S]*?)<\/(?:[\w]+:)?Contact>/g;
+      while ((match = contactRegex.exec(xml)) !== null) {
+        const contactXml = match[1];
+        const typeMatch = contactXml.match(/<(?:[\w]+:)?TypeCode[^>]*>([^<]+)</);
+        const nameMatch = contactXml.match(/<(?:[\w]+:)?Name[^>]*>([^<]+)</);
+        const phoneMatch = contactXml.match(/<(?:[\w]+:)?PhoneNumber[^>]*>([^<]+)</);
+        const emailMatch = contactXml.match(/<(?:[\w]+:)?Email[^>]*>([^<]+)</);
+
+        contacts.push({
+          type: typeMatch ? typeMatch[1].trim() : 'unknown',
+          name: nameMatch ? nameMatch[1].trim() : undefined,
+          phoneNumber: phoneMatch ? phoneMatch[1].trim() : undefined,
+          email: emailMatch ? emailMatch[1].trim() : undefined
+        });
+      }
+
+      return {
+        name,
+        countryCode,
+        identifiers:
+          identifiers.length > 0
+            ? identifiers
+            : [
+                {
+                  scheme: 'unknown',
+                  value: 'unknown'
+                }
+              ],
+        websites: websites.length > 0 ? websites : undefined,
+        contacts: contacts.length > 0 ? contacts : undefined,
+        geographicalInfo
+      };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Closes all connections
+   */
+  async close(): Promise<void> {
+    await this.httpClient.close();
+  }
+}

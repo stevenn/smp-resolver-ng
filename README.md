@@ -1,0 +1,127 @@
+# SMP Resolver NG
+
+A high-performance PEPPOL SMP resolver library built from scratch, following the official SML and SMP specifications.
+
+## Features
+
+- ✅ Spec-compliant SML/SMP discovery via DNS NAPTR records
+- ✅ High-performance HTTP client with connection pooling (undici)
+- ✅ Minimal dependencies for maximum reliability
+- ✅ Multiple API interfaces for different use cases
+- ✅ Belgian participant support (0208 KBO and 9925 VAT schemes)
+- ✅ CSV export for bulk processing workflows
+- ✅ TypeScript with full type safety
+
+## Installation
+
+```bash
+npm install @stevenn/smp-resolver-ng
+```
+
+## Usage
+
+### Basic Resolution
+
+```typescript
+import { SMPResolver } from '@stevenn/smp-resolver-ng';
+
+const resolver = new SMPResolver();
+
+// Resolve by participant ID
+const result = await resolver.resolve('0208:0123456789');
+console.log(result.isRegistered); // true/false
+
+// Automatic Belgian scheme detection
+const info = await resolver.resolveParticipant('0123456789');
+```
+
+### Get Business Entity Information
+
+```typescript
+// For peppolcheck-style business card retrieval
+const businessCard = await resolver.getBusinessCard('0208:0123456789');
+console.log(businessCard.entity.name);         // Company name
+console.log(businessCard.entity.countryCode);  // BE
+console.log(businessCard.entity.identifiers);  // [{scheme: '0208', value: '0123456789'}]
+console.log(businessCard.smpHostname);         // SMP server hostname
+```
+
+### Get Technical Endpoint URLs
+
+```typescript
+// For bulk processor-style endpoint extraction
+const endpoints = await resolver.getEndpointUrls('0208:0123456789');
+console.log(endpoints.smpHostname);        // smp.example.com
+console.log(endpoints.endpoint?.url);      // https://as4.example.com/as4
+console.log(endpoints.endpoint?.transportProfile); // peppol-transport-as4-v2_0
+```
+
+### Batch Processing
+
+```typescript
+import { CSVExporter } from '@stevenn/smp-resolver-ng';
+
+const participantIds = ['0208:0123456789', '0208:9876543210'];
+const results = await resolver.resolveBatch(participantIds, {
+  concurrency: 20,
+  onProgress: (done, total) => console.log(`${done}/${total}`)
+});
+
+// Export to CSV
+const csv = CSVExporter.formatBulkResults(results);
+fs.writeFileSync('results.csv', csv);
+```
+
+## CLI Tool
+
+The package includes a CLI tool for quick lookups:
+
+```bash
+# Install globally
+npm install -g @stevenn/smp-resolver-ng
+
+# Check single participant
+smp-resolve 0843766574
+
+# Verbose output with endpoint details
+smp-resolve 0843766574 -v
+
+# Get business card information
+smp-resolve 0843766574 -b
+
+# Batch process with CSV output
+smp-resolve 0843766574 0755752833 --batch --csv > results.csv
+
+# Use explicit scheme
+smp-resolve 0208:0843766574
+smp-resolve 9925:BE0843766574
+```
+
+## API Reference
+
+### SMPResolver
+
+Main resolver class with methods:
+
+- `resolve(participantId, options)` - Core resolution method
+- `resolveParticipant(identifier)` - Auto-detect Belgian schemes
+- `getBusinessCard(participantId)` - Business entity information
+- `getEndpointUrls(participantId)` - Technical endpoint URLs
+- `resolveBatch(participantIds, options)` - Bulk processing
+
+### Utilities
+
+- `hashParticipantId(id)` - SHA-256 + Base32 encoding
+- `normalizeBelgianIdentifier(id)` - KBO/VAT normalization
+- `CSVExporter.formatBulkResults(results)` - CSV generation
+
+## Performance
+
+- Connection pooling for efficient HTTP requests
+- Minimal XML parsing overhead
+- Support for concurrent batch processing
+- Zero unnecessary dependencies
+
+## License
+
+MIT

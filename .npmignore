@@ -1,0 +1,26 @@
+# Source files
+src/
+*.ts
+!dist/**/*.d.ts
+
+# Config files
+tsconfig.json
+.gitignore
+.npmignore
+
+# Development
+examples/
+tests/
+benchmarks/
+specs/
+*.log
+
+# Build artifacts
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+CLAUDE.md
