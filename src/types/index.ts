@@ -80,7 +80,6 @@ export interface BusinessCard {
   endpoints: Array<{
     transportProfile: string;
     endpointUrl: string;
-    serviceProvider?: string;
     technicalContactUrl?: string;
     technicalInformationUrl?: string;
   }>;

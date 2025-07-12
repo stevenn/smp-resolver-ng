@@ -412,22 +412,6 @@ export class SMPResolver {
     return parts[parts.length - 1] || documentId;
   }
 
-  /**
-   * Detects service provider from endpoint URL
-   */
-  private detectServiceProvider(url: string): string | undefined {
-    const hostname = new URL(url).hostname.toLowerCase();
-
-    if (hostname.includes('babelway')) return 'Babelway';
-    if (hostname.includes('tickstar')) return 'TIE Kinetix';
-    if (hostname.includes('basware')) return 'Basware';
-    if (hostname.includes('pagero')) return 'Pagero';
-    if (hostname.includes('storecove')) return 'Storecove';
-    if (hostname.includes('tradeshift')) return 'Tradeshift';
-    if (hostname.includes('seeburger')) return 'Seeburger';
-
-    return undefined;
-  }
 
   /**
    * Fetches business card XML from SMP
