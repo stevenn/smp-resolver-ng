@@ -45,6 +45,9 @@
     "type": "git",
     "url": "https://github.com/stevenn/smp-resolver-ng.git"
   },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "dependencies": {
     "undici": "^6.21.0"
   },
