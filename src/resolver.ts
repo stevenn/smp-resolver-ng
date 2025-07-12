@@ -3,6 +3,7 @@ import { HTTPClient } from './http/http-client.js';
 import { RedirectHandler } from './http/redirect-handler.js';
 import { XMLParser } from './xml/parser.js';
 import { hashParticipantId, normalizeBelgianIdentifier } from './sml/participant-hash.js';
+import { DocumentTypeLookup } from './data/document-types.js';
 import type {
   SMPResolverConfig,
   ParticipantInfo,
@@ -463,31 +464,31 @@ export class SMPResolver {
    * Extracts a friendly name from document identifier
    */
   private extractFriendlyDocumentName(documentId: string): string {
+    // First try to look up in the official code list
+    const lookup = DocumentTypeLookup.getInstance();
+    const friendlyName = lookup.getFriendlyName(documentId);
+    
+    if (friendlyName) {
+      return friendlyName;
+    }
+    
+    // Fallback: extract a basic name from the document ID
     // Remove scheme prefix if present
     const withoutScheme = documentId.replace(/^[^:]+::/, '');
-
-    // Handle UBL format: urn:oasis:names:specification:ubl:schema:xsd:Invoice-2::Invoice##...
-    const ublMatch = withoutScheme.match(/xsd:([^:]+)-\d+::([^#]+)##(.+)$/);
+    
+    // Try to extract document type from UBL format
+    const ublMatch = withoutScheme.match(/xsd:([^:]+)-\d+::([^#]+)##/);
     if (ublMatch) {
-      const docType = ublMatch[2];
-      const subtype = ublMatch[3];
-      // Extract meaningful part from subtype
-      if (subtype.includes('peppol')) {
-        const peppolMatch = subtype.match(/peppol[^:]*:([^:]+):/);
-        if (peppolMatch) {
-          return `${docType} (PEPPOL ${peppolMatch[1]})`;
-        }
-      }
-      return `${docType} (${subtype})`;
+      return ublMatch[2];
     }
-
-    // Handle CII format: urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100::...
-    const ciiMatch = withoutScheme.match(/standard:([^:]+):\d+::(.+)$/);
+    
+    // Try to extract from CII format
+    const ciiMatch = withoutScheme.match(/standard:([^:]+):\d+::/);
     if (ciiMatch) {
-      return `${ciiMatch[1]} (${ciiMatch[2]})`;
+      return ciiMatch[1];
     }
-
-    // Fallback: return last meaningful part
+    
+    // Last resort: return the last meaningful part
     const parts = withoutScheme.split('::');
     return parts[parts.length - 1] || documentId;
   }
