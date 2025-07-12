@@ -10,6 +10,7 @@ interface CLIOptions {
   csv: boolean;
   batch: boolean;
   businessCard: boolean;
+  all: boolean;
   scheme?: string;
 }
 
@@ -27,8 +28,15 @@ async function main() {
     csv: args.includes('--csv'),
     batch: args.includes('--batch'),
     businessCard: args.includes('--business-card') || args.includes('-b'),
+    all: args.includes('--all') || args.includes('-a'),
     scheme: extractOption(args, '--scheme') || '0208'
   };
+  
+  // --all implies both verbose and businessCard
+  if (options.all) {
+    options.verbose = true;
+    options.businessCard = true;
+  }
 
   // Get participant IDs (all non-option arguments)
   const participantIds = args.filter(arg => !arg.startsWith('-'));
@@ -65,21 +73,28 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     participantId = `${options.scheme}:${participantId}`;
   }
 
-  let result:
-    | {
-        participantId: string;
-        isRegistered: boolean;
-        businessCard?: BusinessCard;
-        error?: string;
-        endpointDetails?: EndpointInfo;
-      }
-    | ParticipantInfo;
+  let result: any;
 
-  if (options.businessCard) {
-    // Fetch business card with entity details
+  if (options.all || (options.verbose && options.businessCard)) {
+    // Combined mode: fetch everything
+    result = await resolver.resolve(participantId, {
+      fetchDocumentTypes: true,
+      includeBusinessCard: true
+    });
+
+    // Also fetch endpoint details
+    if (result.isRegistered) {
+      try {
+        const endpointInfo = await resolver.getEndpointUrls(participantId);
+        result.endpointDetails = endpointInfo;
+      } catch {
+        // Continue even if endpoint fetch fails
+      }
+    }
+  } else if (options.businessCard) {
+    // Business card only
     try {
       const businessCard = await resolver.getBusinessCard(participantId);
-
       result = {
         participantId,
         isRegistered: true,
@@ -102,7 +117,7 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     if (options.verbose && result.isRegistered) {
       try {
         const endpointInfo = await resolver.getEndpointUrls(participantId);
-        (result as any).endpointDetails = endpointInfo;
+        result.endpointDetails = endpointInfo;
       } catch {
         // Continue even if endpoint fetch fails
       }
@@ -189,6 +204,7 @@ Options:
   -v, --verbose       Show detailed output and progress
   -q, --quiet         Show minimal output (just registered/not registered)
   -b, --business-card Fetch full business card information
+  -a, --all           Fetch all available information (verbose + business card)
   --csv               Output in CSV format
   --batch             Process multiple participants in batch mode
   --scheme <id>       Default scheme to use (default: 0208)
@@ -211,6 +227,9 @@ Examples:
   
   # Fetch business card
   smp-resolve 0123456789 -b
+  
+  # Fetch all information (verbose + business card)
+  smp-resolve 0123456789 --all
 `);
 }
 

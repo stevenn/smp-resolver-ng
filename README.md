@@ -11,6 +11,9 @@ A high-performance PEPPOL SMP resolver library built from scratch, following the
 - ✅ Belgian participant support (0208 KBO and 9925 VAT schemes)
 - ✅ CSV export for bulk processing workflows
 - ✅ TypeScript with full type safety
+- ✅ Service description extraction from SMP endpoints
+- ✅ Official PEPPOL code list v9.2 for document type names
+- ✅ Combined --all mode for comprehensive participant info
 
 ## Installation
 
@@ -64,9 +67,12 @@ console.log(businessCard.smpHostname);         // SMP server hostname
 ```typescript
 // For bulk processor-style endpoint extraction
 const endpoints = await resolver.getEndpointUrls('0208:0123456789');
-console.log(endpoints.smpHostname);        // smp.example.com
-console.log(endpoints.endpoint?.url);      // https://as4.example.com/as4
-console.log(endpoints.endpoint?.transportProfile); // peppol-transport-as4-v2_0
+console.log(endpoints.smpHostname);                      // smp.example.com
+console.log(endpoints.endpoint?.url);                    // https://as4.example.com/as4
+console.log(endpoints.endpoint?.transportProfile);       // peppol-transport-as4-v2_0
+console.log(endpoints.endpoint?.serviceDescription);     // Service description from SMP
+console.log(endpoints.endpoint?.technicalContactUrl);    // Technical contact URL
+console.log(endpoints.endpoint?.technicalInformationUrl); // Technical info URL
 ```
 
 ### Batch Processing
@@ -112,6 +118,9 @@ smp-resolve 0843766574 -v
 
 # Get business card information
 smp-resolve 0843766574 -b
+
+# Get all information (verbose + business card combined)
+smp-resolve 0843766574 --all
 
 # Batch process with CSV output
 smp-resolve 0843766574 0755752833 --batch --csv > results.csv
