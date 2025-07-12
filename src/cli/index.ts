@@ -102,7 +102,6 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     if (options.verbose && result.isRegistered) {
       try {
         const endpointInfo = await resolver.getEndpointUrls(participantId);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         (result as any).endpointDetails = endpointInfo;
       } catch {
         // Continue even if endpoint fetch fails
