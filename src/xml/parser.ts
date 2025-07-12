@@ -251,6 +251,9 @@ export class XMLParser {
 
       if (!endpointUrl) continue;
 
+      const technicalContactUrl = this.getElementText(endpointElement, 'TechnicalContactUrl');
+      const technicalInformationUrl = this.getElementText(endpointElement, 'TechnicalInformationUrl');
+      
       const endpoint: ServiceEndpoint = {
         transportProfile,
         endpointUrl,
@@ -260,8 +263,8 @@ export class XMLParser {
         ),
         certificate: this.getElementText(endpointElement, 'Certificate'),
         serviceDescription: this.getElementText(endpointElement, 'ServiceDescription'),
-        technicalContactUrl: this.getElementText(endpointElement, 'TechnicalContactUrl'),
-        technicalInformationUrl: this.getElementText(endpointElement, 'TechnicalInformationUrl')
+        technicalContactUrl,
+        technicalInformationUrl
       };
 
       // Parse dates if present

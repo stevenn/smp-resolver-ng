@@ -39,7 +39,7 @@ export class CSVExporter {
 
     return [
       this.escapeCSV(companyId),
-      this.escapeCSV(''), // company_name - not available in basic resolver
+      this.escapeCSV(result.companyName || ''),
       this.escapeCSV(result.success ? 'true' : 'false'),
       this.escapeCSV(result.smpHostname || ''),
       this.escapeCSV(result.as4EndpointUrl || ''),

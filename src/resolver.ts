@@ -127,7 +127,8 @@ export class SMPResolver {
         result.businessCard = await this.getBusinessCard(participantId, options);
       }
 
-      result.endpointInfo = this.extractEndpointInfo(serviceMetadata, smpUrl);
+      // Extract endpoint info (fetch first document's metadata for endpoints)
+      result.endpointInfo = await this.extractEndpointInfo(serviceMetadata, smpUrl, participantId);
 
       return result;
     } catch (error: unknown) {
@@ -262,10 +263,21 @@ export class SMPResolver {
       const chunk = participantIds.slice(i, i + concurrency);
       const chunkPromises = chunk.map(async participantId => {
         try {
+          // First get endpoint info
           const info = await this.getEndpointUrls(participantId);
+          
+          // Try to get company name from business card
+          let companyName: string | undefined;
+          try {
+            const businessCard = await this.getBusinessCard(participantId);
+            companyName = businessCard.entity.name;
+          } catch {
+            // Company name is optional, continue without it
+          }
 
           return {
             participantId,
+            companyName,
             success: true,
             smpHostname: info.smpHostname,
             as4EndpointUrl: info.endpoint?.url,
@@ -319,19 +331,39 @@ export class SMPResolver {
     // Extract document types from service references
     const documentTypes: DocumentType[] = [];
     for (const refUrl of serviceGroup.serviceReferences) {
-      // Extract document ID from URL
-      // Format: .../services/{encoded-document-id}
-      const match = refUrl.match(/\/services\/(.+)$/);
-      if (match) {
-        const encodedDocId = match[1];
-        const docId = decodeURIComponent(encodedDocId);
+      // Service references already contain the full URL, just need to extract the doc ID
+      // Format could be: http://smp.host/iso6523-actorid-upis::0208:123/services/{encoded-doc-id}
+      // or just relative: /services/{encoded-doc-id}
+      let docId: string | null = null;
+      
+      // Try to extract from full URL
+      const fullUrlMatch = refUrl.match(/\/services\/(.+)$/);
+      if (fullUrlMatch) {
+        const encodedDocId = fullUrlMatch[1];
+        docId = decodeURIComponent(encodedDocId);
+      }
+      
+      // If we found a document ID, add it
+      if (docId) {
+        // Extract scheme from document ID if present
+        let scheme = 'busdox-docid-qns';
+        let value = docId;
+        
+        // Check if document ID contains scheme prefix
+        if (docId.includes('::')) {
+          const parts = docId.split('::');
+          if (parts.length >= 2) {
+            scheme = parts[0];
+            value = parts.slice(1).join('::');
+          }
+        }
 
         documentTypes.push({
           documentIdentifier: {
-            scheme: 'busdox-docid-qns',
-            value: docId
+            scheme,
+            value
           },
-          friendlyName: this.extractFriendlyDocumentName(docId),
+          friendlyName: this.extractFriendlyDocumentName(value),
           processes: []
         });
       }
@@ -367,12 +399,51 @@ export class SMPResolver {
   /**
    * Extracts endpoint info from service metadata
    */
-  private extractEndpointInfo(metadata: ServiceMetadata, smpUrl: string): EndpointInfo {
+  private async extractEndpointInfo(
+    metadata: ServiceMetadata,
+    smpUrl: string,
+    participantId: string
+  ): Promise<EndpointInfo> {
     // Extract hostname from SMP URL
     const smpHostname = new URL(smpUrl).hostname;
 
-    // TODO: Implement proper endpoint extraction from ServiceMetadata
-    // This requires fetching each document type's ServiceMetadata
+    // Try to fetch first document type's metadata to get endpoints
+    if (metadata.documentTypes.length > 0) {
+      try {
+        // Construct URL for first document type
+        const docType = metadata.documentTypes[0];
+        const encodedDocId = encodeURIComponent(docType.documentIdentifier.value);
+        const metadataUrl = `${smpUrl}/iso6523-actorid-upis::${participantId}/services/${encodedDocId}`;
+        
+        const response = await this.redirectHandler.followRedirects(metadataUrl);
+        
+        if (response.statusCode === 200) {
+          const serviceMetadata = this.xmlParser.parseServiceMetadata(response.body);
+          
+          // Get first endpoint from first process of first document type
+          if (serviceMetadata.documentTypes.length > 0) {
+            const firstDoc = serviceMetadata.documentTypes[0];
+            if (firstDoc.processes.length > 0) {
+              const firstProcess = firstDoc.processes[0];
+              if (firstProcess.endpoints.length > 0) {
+                const endpoint = firstProcess.endpoints[0];
+                return {
+                  smpHostname,
+                  endpoint: {
+                    url: endpoint.endpointUrl,
+                    transportProfile: endpoint.transportProfile,
+                    technicalContactUrl: endpoint.technicalContactUrl,
+                    technicalInformationUrl: endpoint.technicalInformationUrl
+                  }
+                };
+              }
+            }
+          }
+        }
+      } catch {
+        // Continue even if metadata fetch fails
+      }
+    }
 
     return {
       smpHostname,

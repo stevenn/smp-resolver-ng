@@ -107,6 +107,7 @@ export interface ParticipantInfo {
 
 export interface BatchResult {
   participantId: string;
+  companyName?: string;
   success: boolean;
   smpHostname?: string;
   as4EndpointUrl?: string;
