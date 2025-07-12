@@ -144,9 +144,20 @@ Main resolver class with methods:
 
 ### Utilities
 
-- `hashParticipantId(id)` - SHA-256 + Base32 encoding
+- `hashParticipantId(id, scheme)` - SHA-256 + Base32 encoding for SML lookup
+- `validateParticipantId(scheme, value)` - Validate participant ID format
 - `normalizeBelgianIdentifier(id)` - KBO/VAT normalization
 - `CSVExporter.formatBulkResults(results)` - CSV generation
+
+Example validation:
+```typescript
+import { validateParticipantId } from '@stevenn/smp-resolver-ng';
+
+// Validate participant ID components
+if (validateParticipantId('0208', '0123456789')) {
+  console.log('Valid participant ID');
+}
+```
 
 ## Performance
 

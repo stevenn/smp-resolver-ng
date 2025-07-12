@@ -397,25 +397,6 @@ export class SMPResolver {
     };
   }
 
-  /**
-   * Fetches full metadata including document types
-   */
-  private async fetchFullMetadata(participantId: string): Promise<ServiceMetadata> {
-    const baseInfo = await this.resolve(participantId);
-    if (!baseInfo.isRegistered) {
-      throw new Error('Participant not registered');
-    }
-
-    // This would fetch each document type's metadata
-    // For now, returning mock data structure
-    return {
-      participantIdentifier: {
-        scheme: participantId.split(':')[0],
-        value: participantId.split(':')[1]
-      },
-      documentTypes: []
-    };
-  }
 
   /**
    * Extracts endpoint info from service metadata
