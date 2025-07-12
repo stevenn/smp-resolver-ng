@@ -40,11 +40,15 @@ export class NAPTRResolver {
         regexp: record.regexp,
         replacement: record.replacement
       }));
-    } catch (error: any) {
-      if (error.code === 'ENOTFOUND' || error.code === 'ENODATA') {
-        return [];
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error) {
+        const errorCode = (error as { code: string }).code;
+        if (errorCode === 'ENOTFOUND' || errorCode === 'ENODATA') {
+          return [];
+        }
       }
-      throw new Error(`DNS NAPTR lookup failed for ${domain}: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`DNS NAPTR lookup failed for ${domain}: ${message}`);
     }
   }
 

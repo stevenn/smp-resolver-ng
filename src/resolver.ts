@@ -13,8 +13,7 @@ import type {
   ResolveOptions,
   BatchOptions,
   ServiceMetadata,
-  DocumentType,
-  ServiceEndpoint
+  DocumentType
 } from './types/index.js';
 
 export class SMPResolver {
@@ -60,7 +59,7 @@ export class SMPResolver {
         if (result.isRegistered) {
           return result;
         }
-      } catch (error) {
+      } catch {
         // Continue to VAT scheme
       }
     }
@@ -72,7 +71,7 @@ export class SMPResolver {
         if (result.isRegistered) {
           return result;
         }
-      } catch (error) {
+      } catch {
         // Both failed
       }
     }
@@ -131,11 +130,11 @@ export class SMPResolver {
       result.endpointInfo = this.extractEndpointInfo(serviceMetadata, smpUrl);
 
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         participantId,
         isRegistered: false,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }
@@ -143,7 +142,7 @@ export class SMPResolver {
   /**
    * Gets business card information (peppolcheck compatibility)
    */
-  async getBusinessCard(participantId: string, options?: ResolveOptions): Promise<BusinessCard> {
+  async getBusinessCard(participantId: string, _options?: ResolveOptions): Promise<BusinessCard> {
     // First resolve to get SMP URL
     const info = await this.resolve(participantId);
 
@@ -239,14 +238,15 @@ export class SMPResolver {
               }
             }
           }
-        } catch (error) {
+        } catch {
           // Continue even if metadata fetch fails
         }
       }
 
       return { smpHostname, endpoint: endpointData };
-    } catch (error: any) {
-      throw new Error(`Failed to get endpoint URLs: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to get endpoint URLs: ${message}`);
     }
   }
 
@@ -273,11 +273,12 @@ export class SMPResolver {
             technicalInfoUrl: info.endpoint?.technicalInformationUrl,
             processedAt: new Date()
           };
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error);
           return {
             participantId,
             success: false,
-            errorMessage: error.message,
+            errorMessage: message,
             processedAt: new Date()
           };
         }
@@ -412,7 +413,6 @@ export class SMPResolver {
     return parts[parts.length - 1] || documentId;
   }
 
-
   /**
    * Fetches business card XML from SMP
    */
@@ -440,7 +440,7 @@ export class SMPResolver {
           // Parse business card XML
           return this.parseBusinessCardXML(response.body);
         }
-      } catch (error) {
+      } catch {
         // Continue trying other URLs
         continue;
       }
@@ -457,7 +457,7 @@ export class SMPResolver {
           if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
             return this.parseBusinessCardXML(response.body);
           }
-        } catch (error) {
+        } catch {
           continue;
         }
       }
@@ -554,7 +554,7 @@ export class SMPResolver {
         contacts: contacts.length > 0 ? contacts : undefined,
         geographicalInfo
       };
-    } catch (error) {
+    } catch {
       return null;
     }
   }

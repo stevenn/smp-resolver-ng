@@ -24,6 +24,7 @@ export default tseslint.config(
   prettierConfig,
   {
     files: ['**/*.ts', '**/*.tsx'],
+    ignores: ['tests/**/*'],
     plugins: {
       prettier: prettierPlugin
     },
@@ -46,6 +47,30 @@ export default tseslint.config(
         prefer: 'type-imports'
       }],
       'no-console': 'off' // CLI tools need console
+    }
+  },
+  {
+    files: ['tests/**/*.ts'],
+    plugins: {
+      prettier: prettierPlugin
+    },
+    languageOptions: {
+      parserOptions: {
+        project: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      'prettier/prettier': 'error',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_'
+      }],
+      'no-console': 'off'
     }
   }
 );

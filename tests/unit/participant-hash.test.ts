@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { 
-  hashParticipantId, 
-  validateParticipantId, 
-  normalizeBelgianIdentifier 
+import {
+  hashParticipantId,
+  validateParticipantId,
+  normalizeBelgianIdentifier
 } from '../../src/sml/participant-hash.js';
 
 describe('hashParticipantId', () => {
@@ -64,7 +64,7 @@ describe('normalizeBelgianIdentifier', () => {
   it('should handle numbers with dots and spaces', () => {
     const result = normalizeBelgianIdentifier('0843.766.574');
     expect(result.kboParticipantId).toBe('0208:0843766574');
-    
+
     const result2 = normalizeBelgianIdentifier('BE 0843 766 574');
     expect(result2.kboParticipantId).toBe('0208:0843766574');
   });

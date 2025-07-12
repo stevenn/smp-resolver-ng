@@ -1,5 +1,4 @@
 import { Agent, request, Pool } from 'undici';
-import type { Dispatcher } from 'undici';
 
 export interface HTTPClientOptions {
   timeout?: number;
@@ -127,8 +126,8 @@ export class HTTPClient {
   /**
    * Gets statistics about connection pools
    */
-  getStats(): Record<string, any> {
-    const stats: Record<string, any> = {};
+  getStats(): Record<string, unknown> {
+    const stats: Record<string, unknown> = {};
     for (const [origin, pool] of this.pools.entries()) {
       stats[origin] = pool.stats;
     }

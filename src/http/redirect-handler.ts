@@ -77,9 +77,8 @@ export class RedirectHandler {
   /**
    * Validates if a redirect is allowed according to PEPPOL spec
    */
-  validateRedirect(fromUrl: string, toUrl: string): boolean {
+  validateRedirect(_fromUrl: string, toUrl: string): boolean {
     try {
-      const from = new URL(fromUrl);
       const to = new URL(toUrl);
 
       // Must be HTTPS

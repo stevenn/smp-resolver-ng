@@ -14,8 +14,21 @@ A high-performance PEPPOL SMP resolver library built from scratch, following the
 
 ## Installation
 
-```bash
-npm install @stevenn/smp-resolver-ng
+This package is published to GitHub Packages. To install:
+
+1. Configure npm to use GitHub Packages for the `@stevenn` scope:
+   ```bash
+   echo "@stevenn:registry=https://npm.pkg.github.com" >> ~/.npmrc
+   ```
+
+2. Install the package:
+   ```bash
+   npm install @stevenn/smp-resolver-ng
+   ```
+
+Alternatively, you can create a `.npmrc` file in your project root:
+```
+@stevenn:registry=https://npm.pkg.github.com
 ```
 
 ## Usage
@@ -74,12 +87,23 @@ fs.writeFileSync('results.csv', csv);
 
 ## CLI Tool
 
-The package includes a CLI tool for quick lookups:
+The package includes a CLI tool for quick lookups.
+
+### Global Installation
+
+First, ensure npm is configured for GitHub Packages (if not already done):
+```bash
+npm config set @stevenn:registry https://npm.pkg.github.com
+```
+
+Then install globally:
+```bash
+npm install -g @stevenn/smp-resolver-ng
+```
+
+### Usage
 
 ```bash
-# Install globally
-npm install -g @stevenn/smp-resolver-ng
-
 # Check single participant
 smp-resolve 0843766574
 

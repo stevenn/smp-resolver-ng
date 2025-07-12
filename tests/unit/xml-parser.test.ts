@@ -16,7 +16,7 @@ describe('XMLParser', () => {
 </ServiceGroup>`;
 
       const result = parser.parseServiceGroup(xml);
-      
+
       expect(result.participantIdentifier.scheme).toBe('iso6523-actorid-upis');
       expect(result.participantIdentifier.value).toBe('0208:0843766574');
       expect(result.serviceReferences).toHaveLength(2);
@@ -62,17 +62,17 @@ describe('XMLParser', () => {
 </ServiceMetadata>`;
 
       const result = parser.parseServiceMetadata(xml);
-      
+
       expect(result.documentTypes).toHaveLength(1);
-      
+
       const docType = result.documentTypes[0];
       expect(docType.documentIdentifier.value).toContain('Invoice');
       expect(docType.processes).toHaveLength(1);
-      
+
       const process = docType.processes[0];
       expect(process.processIdentifier.value).toContain('billing');
       expect(process.endpoints).toHaveLength(1);
-      
+
       const endpoint = process.endpoints[0];
       expect(endpoint.transportProfile).toBe('peppol-transport-as4-v2_0');
       expect(endpoint.endpointUrl).toBe('https://as4.example.com/as4');
@@ -101,14 +101,16 @@ describe('XMLParser', () => {
 </ns2:ServiceMetadata>`;
 
       const result = parser.parseServiceMetadata(xml);
-      expect(result.documentTypes[0].processes[0].endpoints[0].endpointUrl).toBe('https://test.com/as4');
+      expect(result.documentTypes[0].processes[0].endpoints[0].endpointUrl).toBe(
+        'https://test.com/as4'
+      );
     });
   });
 
   describe('error handling', () => {
     it('should handle malformed XML gracefully', () => {
       const malformedXml = '<invalid>not closed';
-      
+
       expect(() => parser.parseServiceGroup(malformedXml)).toThrow();
       expect(() => parser.parseServiceMetadata(malformedXml)).toThrow();
     });
@@ -118,7 +120,9 @@ describe('XMLParser', () => {
 <ServiceGroup xmlns="http://busdox.org/serviceMetadata/publishing/1.0/">
 </ServiceGroup>`;
 
-      expect(() => parser.parseServiceGroup(xml)).toThrow('Invalid ServiceGroup XML: missing ParticipantIdentifier');
+      expect(() => parser.parseServiceGroup(xml)).toThrow(
+        'Invalid ServiceGroup XML: missing ParticipantIdentifier'
+      );
     });
   });
 });

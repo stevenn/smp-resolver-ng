@@ -2,6 +2,7 @@
 
 import { SMPResolver } from '../index.js';
 import { CSVExporter } from '../csv/exporter.js';
+import type { BusinessCard, EndpointInfo, ParticipantInfo } from '../types/index.js';
 
 interface CLIOptions {
   verbose: boolean;
@@ -48,8 +49,8 @@ async function main() {
     } else {
       await processSingle(resolver, participantIds[0], options);
     }
-  } catch (error: any) {
-    console.error('Error:', error.message);
+  } catch (error: unknown) {
+    console.error('Error:', error instanceof Error ? error.message : String(error));
     process.exit(1);
   } finally {
     await resolver.close();
@@ -64,7 +65,15 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     participantId = `${options.scheme}:${participantId}`;
   }
 
-  let result: any;
+  let result:
+    | {
+        participantId: string;
+        isRegistered: boolean;
+        businessCard?: BusinessCard;
+        error?: string;
+        endpointDetails?: EndpointInfo;
+      }
+    | ParticipantInfo;
 
   if (options.businessCard) {
     // Fetch business card with entity details
@@ -76,11 +85,11 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
         isRegistered: true,
         businessCard
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       result = {
         participantId,
         isRegistered: false,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   } else {
@@ -93,8 +102,9 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     if (options.verbose && result.isRegistered) {
       try {
         const endpointInfo = await resolver.getEndpointUrls(participantId);
-        result.endpointDetails = endpointInfo;
-      } catch (error) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+        (result as any).endpointDetails = endpointInfo;
+      } catch {
         // Continue even if endpoint fetch fails
       }
     }
@@ -109,7 +119,7 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     const batchResult = {
       participantId,
       success: result.isRegistered,
-      smpHostname: result.endpointInfo?.smpHostname,
+      smpHostname: 'endpointInfo' in result ? result.endpointInfo?.smpHostname : undefined,
       as4EndpointUrl: undefined,
       technicalContactUrl: undefined,
       technicalInfoUrl: undefined,
