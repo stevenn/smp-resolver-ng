@@ -17,6 +17,7 @@ export class CSVExporter {
       'as4_endpoint_url',
       'technical_contact_url',
       'technical_info_url',
+      'service_description',
       'error_message',
       'processed_at'
     ];
@@ -45,6 +46,7 @@ export class CSVExporter {
       this.escapeCSV(result.as4EndpointUrl || ''),
       this.escapeCSV(result.technicalContactUrl || ''),
       this.escapeCSV(result.technicalInfoUrl || ''),
+      this.escapeCSV(result.serviceDescription || ''),
       this.escapeCSV(result.errorMessage || ''),
       this.escapeCSV(result.processedAt.toISOString())
     ];

@@ -129,6 +129,11 @@ export class SMPResolver {
 
       // Extract endpoint info (fetch first document's metadata for endpoints)
       result.endpointInfo = await this.extractEndpointInfo(serviceMetadata, smpUrl, participantId);
+      
+      // Include service description at the top level if available
+      if (result.endpointInfo?.endpoint?.serviceDescription) {
+        result.serviceDescription = result.endpointInfo.endpoint.serviceDescription;
+      }
 
       return result;
     } catch (error: unknown) {
@@ -233,7 +238,8 @@ export class SMPResolver {
                     url: endpoint.endpointUrl,
                     transportProfile: endpoint.transportProfile,
                     technicalContactUrl: endpoint.technicalContactUrl,
-                    technicalInformationUrl: endpoint.technicalInformationUrl
+                    technicalInformationUrl: endpoint.technicalInformationUrl,
+                    serviceDescription: endpoint.serviceDescription
                   };
                 }
               }
@@ -283,6 +289,7 @@ export class SMPResolver {
             as4EndpointUrl: info.endpoint?.url,
             technicalContactUrl: info.endpoint?.technicalContactUrl,
             technicalInfoUrl: info.endpoint?.technicalInformationUrl,
+            serviceDescription: info.endpoint?.serviceDescription,
             processedAt: new Date()
           };
         } catch (error: unknown) {
@@ -433,7 +440,8 @@ export class SMPResolver {
                     url: endpoint.endpointUrl,
                     transportProfile: endpoint.transportProfile,
                     technicalContactUrl: endpoint.technicalContactUrl,
-                    technicalInformationUrl: endpoint.technicalInformationUrl
+                    technicalInformationUrl: endpoint.technicalInformationUrl,
+                    serviceDescription: endpoint.serviceDescription
                   }
                 };
               }

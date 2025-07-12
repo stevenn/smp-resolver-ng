@@ -93,6 +93,7 @@ export interface EndpointInfo {
     transportProfile: string;
     technicalContactUrl?: string;
     technicalInformationUrl?: string;
+    serviceDescription?: string;
   };
 }
 
@@ -102,6 +103,7 @@ export interface ParticipantInfo {
   businessCard?: BusinessCard;
   endpointInfo?: EndpointInfo;
   documentTypes?: string[];
+  serviceDescription?: string;
   error?: string;
 }
 
@@ -113,6 +115,7 @@ export interface BatchResult {
   as4EndpointUrl?: string;
   technicalContactUrl?: string;
   technicalInfoUrl?: string;
+  serviceDescription?: string;
   errorMessage?: string;
   processedAt: Date;
 }

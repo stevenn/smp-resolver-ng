@@ -122,6 +122,7 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
       as4EndpointUrl: undefined,
       technicalContactUrl: undefined,
       technicalInfoUrl: undefined,
+      serviceDescription: undefined,
       errorMessage: result.error,
       processedAt: new Date()
     };
