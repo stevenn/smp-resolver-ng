@@ -80,7 +80,14 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
   });
 
   if (options.quiet) {
-    console.log(result.isRegistered ? 'registered' : 'not registered');
+    // In quiet mode, show registration status
+    if (!result.isRegistered) {
+      console.log('not registered');
+    } else if (result.registrationStatus === 'parked') {
+      console.log('parked (no active endpoints)');
+    } else {
+      console.log('registered');
+    }
     return;
   }
 
@@ -88,6 +95,8 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     const batchResult = {
       participantId,
       success: result.isRegistered,
+      registrationStatus: result.registrationStatus,
+      hasActiveEndpoints: result.hasActiveEndpoints,
       smpHostname: result.smpHostname,
       as4EndpointUrl: result.endpoint?.url,
       technicalContactUrl: result.endpoint?.technicalContactUrl,
@@ -98,7 +107,27 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     };
     console.log(CSVExporter.formatBulkResults([batchResult]));
   } else {
-    console.log(JSON.stringify(result, null, 2));
+    // Add visual indicators for different registration statuses
+    if (options.verbose && result.registrationStatus) {
+      const statusEmoji = {
+        'active': '✅',
+        'parked': '⚠️',
+        'unregistered': '❌'
+      }[result.registrationStatus];
+      
+      const enhancedResult: any = {
+        ...result,
+        _status: `${statusEmoji} ${result.registrationStatus.toUpperCase()}`
+      };
+      
+      if (result.registrationStatus === 'parked') {
+        enhancedResult._note = 'This participant is registered but has no active AS4 endpoints configured';
+      }
+      
+      console.log(JSON.stringify(enhancedResult, null, 2));
+    } else {
+      console.log(JSON.stringify(result, null, 2));
+    }
   }
 }
 

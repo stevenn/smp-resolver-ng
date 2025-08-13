@@ -87,9 +87,16 @@ export interface EndpointInfo {
   };
 }
 
+export type RegistrationStatus = 
+  | 'unregistered'    // Not found in SML/SMP
+  | 'parked'          // Registered but no active endpoints
+  | 'active';         // Registered with active endpoints
+
 export interface ParticipantInfo {
   participantId: string;
   isRegistered: boolean;
+  registrationStatus: RegistrationStatus;
+  hasActiveEndpoints: boolean;
   smpHostname?: string;
   documentTypes?: string[];
   endpoint?: {

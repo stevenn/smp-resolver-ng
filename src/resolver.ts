@@ -7,6 +7,7 @@ import { DocumentTypeLookup } from './data/document-types.js';
 import type {
   SMPResolverConfig,
   ParticipantInfo,
+  RegistrationStatus,
   BusinessCard,
   BusinessEntity,
   EndpointInfo,
@@ -80,6 +81,8 @@ export class SMPResolver {
     return {
       participantId: identifier,
       isRegistered: false,
+      registrationStatus: 'unregistered',
+      hasActiveEndpoints: false,
       error: 'Participant not found in any Belgian scheme'
     };
   }
@@ -104,6 +107,8 @@ export class SMPResolver {
         return {
           participantId,
           isRegistered: false,
+          registrationStatus: 'unregistered',
+          hasActiveEndpoints: false,
           error: 'No SMP found via DNS lookup'
         };
       }
@@ -114,10 +119,18 @@ export class SMPResolver {
       // Extract endpoint info first
       const endpointInfo = await this.extractEndpointInfo(serviceMetadata, smpUrl, participantId);
 
+      // Determine registration status based on endpoints and document types
+      const hasEndpoints = !!endpointInfo.endpoint;
+      const hasDocumentTypes = serviceMetadata.documentTypes.length > 0;
+      const hasActiveEndpoints = hasEndpoints && hasDocumentTypes;
+      const registrationStatus: RegistrationStatus = hasActiveEndpoints ? 'active' : 'parked';
+
       // Build response based on options
       const result: ParticipantInfo = {
         participantId,
-        isRegistered: true
+        isRegistered: true,
+        registrationStatus,
+        hasActiveEndpoints
       };
 
       // Include SMP hostname if verbose mode
@@ -152,6 +165,8 @@ export class SMPResolver {
       return {
         participantId,
         isRegistered: false,
+        registrationStatus: 'unregistered',
+        hasActiveEndpoints: false,
         error: error instanceof Error ? error.message : String(error)
       };
     }
