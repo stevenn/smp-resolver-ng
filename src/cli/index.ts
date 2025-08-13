@@ -3,6 +3,9 @@
 import { SMPResolver } from '../index.js';
 import { CSVExporter } from '../csv/exporter.js';
 import type { BusinessCard, EndpointInfo, ParticipantInfo } from '../types/index.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 interface CLIOptions {
   verbose: boolean;
@@ -14,8 +17,29 @@ interface CLIOptions {
   scheme?: string;
 }
 
+function getVersion(): string {
+  try {
+    // Get the directory of the current module
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    
+    // Navigate to package.json (from dist/cli to root)
+    const packageJsonPath = join(__dirname, '..', '..', 'package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+    return packageJson.version;
+  } catch (error) {
+    return 'unknown';
+  }
+}
+
 async function main() {
   const args = process.argv.slice(2);
+
+  // Handle --version flag
+  if (args.includes('--version') || args.includes('-V')) {
+    console.log(getVersion());
+    process.exit(0);
+  }
 
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
     showHelp();
@@ -177,7 +201,7 @@ function extractOption(args: string[], optionName: string): string | undefined {
 
 function showHelp() {
   console.log(`
-SMP Resolver CLI
+SMP Resolver CLI v${getVersion()}
 
 Usage:
   smp-resolve <participantId> [options]
@@ -185,6 +209,7 @@ Usage:
 
 Options:
   -h, --help          Show this help message
+  -V, --version       Show version number
   -v, --verbose       Show detailed output and progress
   -q, --quiet         Show minimal output (just registered/not registered)
   -b, --business-card Fetch full business card information
