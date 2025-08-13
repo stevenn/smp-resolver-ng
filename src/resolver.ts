@@ -102,7 +102,7 @@ export class SMPResolver {
       const hash = hashParticipantId(value, scheme);
 
       // DNS lookup
-      const smpUrl = await this.naptrResolver.lookupSMP(hash, this.config.smlDomain);
+      const smpUrl = await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain);
       if (!smpUrl) {
         return {
           participantId,
@@ -114,10 +114,29 @@ export class SMPResolver {
       }
 
       // Fetch service metadata
-      const serviceMetadata = await this.fetchServiceMetadata(smpUrl, participantId);
+      let serviceMetadata: ServiceMetadata;
+      let isParkedDueToNoServiceGroup = false;
+      
+      try {
+        serviceMetadata = await this.fetchServiceMetadata(smpUrl, participantId);
+      } catch (error) {
+        // If service group returns 404, the participant is registered but has no service metadata (parked)
+        if (error instanceof Error && error.message.includes('SMP returned status 404')) {
+          isParkedDueToNoServiceGroup = true;
+          serviceMetadata = { 
+            participantIdentifier: { scheme: scheme, value: value },
+            documentTypes: [],
+            smpUrl: smpUrl
+          };
+        } else {
+          throw error;
+        }
+      }
 
       // Extract endpoint info first
-      const endpointInfo = await this.extractEndpointInfo(serviceMetadata, smpUrl, participantId);
+      const endpointInfo = isParkedDueToNoServiceGroup 
+        ? { smpHostname: new URL(smpUrl).hostname, endpoint: undefined }
+        : await this.extractEndpointInfo(serviceMetadata, smpUrl, participantId);
 
       // Determine registration status based on endpoints and document types
       const hasEndpoints = !!endpointInfo.endpoint;
@@ -183,7 +202,7 @@ export class SMPResolver {
     }
 
     const hash = hashParticipantId(value, scheme);
-    const smpUrl = await this.naptrResolver.lookupSMP(hash, this.config.smlDomain);
+    const smpUrl = await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain);
 
     if (!smpUrl) {
       throw new Error('Participant not registered');
@@ -226,7 +245,7 @@ export class SMPResolver {
 
       // Get SMP URL via DNS
       const hash = hashParticipantId(value, scheme);
-      const smpUrl = await this.naptrResolver.lookupSMP(hash, this.config.smlDomain);
+      const smpUrl = await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain);
 
       if (!smpUrl) {
         throw new Error('No SMP found via DNS lookup');
