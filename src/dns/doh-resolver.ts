@@ -18,7 +18,7 @@ export class DoHResolver implements IDNSResolver {
   private cacheTTL: number;
 
   constructor(options: DoHResolverOptions = {}) {
-    this.timeout = options.timeout ?? 5000;
+    this.timeout = options.timeout ?? 10000; // Increased to 10 seconds
     this.dohUrl = 'https://cloudflare-dns.com/dns-query';
     this.cache = new Map();
     this.cacheTTL = options.cacheTTL ?? 300000; // 5 minutes default
