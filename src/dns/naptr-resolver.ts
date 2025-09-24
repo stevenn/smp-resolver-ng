@@ -1,12 +1,13 @@
 import { Resolver } from 'node:dns/promises';
 import type { DNSRecord } from '../types/index.js';
+import type { IDNSResolver } from './dns-resolver.interface.js';
 
 export interface NAPTRResolverOptions {
   dnsServers?: string[];
   timeout?: number;
 }
 
-export class NAPTRResolver {
+export class NAPTRResolver implements IDNSResolver {
   private resolver: Resolver;
   private timeout: number;
 

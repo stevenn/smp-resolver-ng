@@ -142,4 +142,5 @@ export interface SMPResolverConfig {
   httpTimeout?: number;
   cacheTTL?: number;
   userAgent?: string;
+  useDoH?: boolean;
 }
