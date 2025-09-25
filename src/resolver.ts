@@ -1,5 +1,4 @@
-import { createDNSResolver } from './dns/resolver-factory.js';
-import type { IDNSResolver } from './dns/dns-resolver.interface.js';
+import { NAPTRResolver } from './dns/naptr-resolver.js';
 import { HTTPClient } from './http/http-client.js';
 import { RedirectHandler } from './http/redirect-handler.js';
 import { XMLParser } from './xml/parser.js';
@@ -21,7 +20,7 @@ import type {
 
 export class SMPResolver {
   private config: Required<SMPResolverConfig>;
-  private dnsResolver: IDNSResolver;
+  private naptrResolver: NAPTRResolver;
   private httpClient: HTTPClient;
   private redirectHandler: RedirectHandler;
   private xmlParser: XMLParser;
@@ -32,16 +31,12 @@ export class SMPResolver {
       dnsServers: config.dnsServers ?? [],
       httpTimeout: config.httpTimeout ?? 30000,
       cacheTTL: config.cacheTTL ?? 3600,
-      userAgent: config.userAgent ?? 'smp-resolver-ng/1.0.0',
-      useDoH: config.useDoH ?? false
-    } as Required<SMPResolverConfig>;
+      userAgent: config.userAgent ?? 'smp-resolver-ng/1.0.0'
+    };
 
-    this.dnsResolver = createDNSResolver({
-      useDoH: this.config.useDoH,
+    this.naptrResolver = new NAPTRResolver({
       dnsServers: this.config.dnsServers,
-      timeout: 5000,
-      cache: true,
-      cacheTTL: this.config.cacheTTL * 1000 // Convert to milliseconds
+      timeout: 5000
     });
 
     this.httpClient = new HTTPClient({
@@ -107,7 +102,7 @@ export class SMPResolver {
       const hash = hashParticipantId(value, scheme);
 
       // DNS lookup
-      const smpUrl = await this.dnsResolver.lookupSMP(hash, scheme, this.config.smlDomain);
+      const smpUrl = await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain);
       if (!smpUrl) {
         return {
           participantId,
@@ -207,7 +202,7 @@ export class SMPResolver {
     }
 
     const hash = hashParticipantId(value, scheme);
-    const smpUrl = await this.dnsResolver.lookupSMP(hash, scheme, this.config.smlDomain);
+    const smpUrl = await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain);
 
     if (!smpUrl) {
       throw new Error('Participant not registered');
@@ -250,7 +245,7 @@ export class SMPResolver {
 
       // Get SMP URL via DNS
       const hash = hashParticipantId(value, scheme);
-      const smpUrl = await this.dnsResolver.lookupSMP(hash, scheme, this.config.smlDomain);
+      const smpUrl = await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain);
 
       if (!smpUrl) {
         throw new Error('No SMP found via DNS lookup');

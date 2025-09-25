@@ -1,6 +1,6 @@
 {
   "name": "@stevenn/smp-resolver-ng",
-  "version": "1.2.0",
+  "version": "1.1.0",
   "description": "High-performance PEPPOL SMP resolver library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -49,8 +49,7 @@
   },
   "dependencies": {
     "fast-xml-parser": "^4.5.0",
-    "tangerine": "^1.6.0",
-    "undici": "^6.21.3"
+    "undici": "^6.21.0"
   },
   "devDependencies": {
     "@types/node": "^20.17.12",
