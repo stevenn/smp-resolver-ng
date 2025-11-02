@@ -134,7 +134,7 @@ export class SMPResolver {
       }
 
       // Extract endpoint info first
-      const endpointInfo = isParkedDueToNoServiceGroup 
+      const endpointInfo = isParkedDueToNoServiceGroup
         ? { smpHostname: new URL(smpUrl).hostname, endpoint: undefined }
         : await this.extractEndpointInfo(serviceMetadata, smpUrl, participantId);
 
@@ -177,6 +177,11 @@ export class SMPResolver {
         } catch {
           // Business card is optional, continue without it
         }
+      }
+
+      // Include diagnostics if available
+      if (endpointInfo.diagnostics) {
+        result.diagnostics = endpointInfo.diagnostics;
       }
 
       return result;
@@ -439,9 +444,10 @@ export class SMPResolver {
     metadata: ServiceMetadata,
     smpUrl: string,
     participantId: string
-  ): Promise<EndpointInfo> {
+  ): Promise<EndpointInfo & { diagnostics?: ParticipantInfo['diagnostics'] }> {
     // Extract hostname from SMP URL
     const smpHostname = new URL(smpUrl).hostname;
+    const smpErrors: Array<{ url: string; statusCode: number; message: string }> = [];
 
     // Try to fetch first document type's metadata to get endpoints
     if (metadata.documentTypes.length > 0) {
@@ -452,12 +458,12 @@ export class SMPResolver {
         const fullDocId = `${docType.documentIdentifier.scheme}::${docType.documentIdentifier.value}`;
         const encodedDocId = encodeURIComponent(fullDocId);
         const metadataUrl = `${smpUrl}/iso6523-actorid-upis::${participantId}/services/${encodedDocId}`;
-        
+
         const response = await this.redirectHandler.followRedirects(metadataUrl);
-        
+
         if (response.statusCode === 200) {
           const serviceMetadata = this.xmlParser.parseServiceMetadata(response.body);
-          
+
           // Get first endpoint from first process of first document type
           if (serviceMetadata.documentTypes.length > 0) {
             const firstDoc = serviceMetadata.documentTypes[0];
@@ -478,15 +484,33 @@ export class SMPResolver {
               }
             }
           }
+        } else {
+          // Capture non-200 status codes
+          smpErrors.push({
+            url: metadataUrl,
+            statusCode: response.statusCode,
+            message: `SMP returned HTTP ${response.statusCode} when fetching service metadata`
+          });
         }
-      } catch {
-        // Continue even if metadata fetch fails
+      } catch (error) {
+        // Capture any errors during metadata fetch
+        const docType = metadata.documentTypes[0];
+        const fullDocId = `${docType.documentIdentifier.scheme}::${docType.documentIdentifier.value}`;
+        const encodedDocId = encodeURIComponent(fullDocId);
+        const metadataUrl = `${smpUrl}/iso6523-actorid-upis::${participantId}/services/${encodedDocId}`;
+
+        smpErrors.push({
+          url: metadataUrl,
+          statusCode: 0,
+          message: error instanceof Error ? error.message : String(error)
+        });
       }
     }
 
     return {
       smpHostname,
-      endpoint: undefined
+      endpoint: undefined,
+      diagnostics: smpErrors.length > 0 ? { smpErrors } : undefined
     };
   }
 

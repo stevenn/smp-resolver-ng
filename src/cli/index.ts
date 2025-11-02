@@ -138,16 +138,26 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
         'parked': '⚠️',
         'unregistered': '❌'
       }[result.registrationStatus];
-      
+
       const enhancedResult: any = {
         ...result,
         _status: `${statusEmoji} ${result.registrationStatus.toUpperCase()}`
       };
-      
+
       if (result.registrationStatus === 'parked') {
         enhancedResult._note = 'This participant is registered but has no active AS4 endpoints configured';
+
+        // Add diagnostic information if available
+        if (result.diagnostics?.smpErrors && result.diagnostics.smpErrors.length > 0) {
+          enhancedResult._smpErrors = result.diagnostics.smpErrors.map(err => ({
+            url: err.url,
+            statusCode: err.statusCode,
+            message: err.message
+          }));
+          enhancedResult._note += '. See _smpErrors for details on why endpoints could not be retrieved.';
+        }
       }
-      
+
       console.log(JSON.stringify(enhancedResult, null, 2));
     } else {
       console.log(JSON.stringify(result, null, 2));

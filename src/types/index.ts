@@ -108,6 +108,14 @@ export interface ParticipantInfo {
   };
   businessEntity?: BusinessEntity;
   error?: string;
+  diagnostics?: {
+    smpErrors?: Array<{
+      url: string;
+      statusCode: number;
+      message: string;
+    }>;
+    warnings?: string[];
+  };
 }
 
 export interface BatchResult {
