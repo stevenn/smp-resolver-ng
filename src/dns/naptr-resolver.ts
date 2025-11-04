@@ -85,11 +85,16 @@ export class NAPTRResolver {
       return null;
     }
 
-    const url = match[2];
+    let url = match[2];
 
     // Validate URL according to spec
     if (!this.isValidSMPUrl(url)) {
       return null;
+    }
+
+    // Remove trailing slash to avoid double slashes when constructing full URLs
+    if (url.endsWith('/')) {
+      url = url.slice(0, -1);
     }
 
     return url;
