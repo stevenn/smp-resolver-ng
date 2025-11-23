@@ -88,6 +88,39 @@ export class SMPResolver {
   }
 
   /**
+   * Performs DNS-only SML lookup to get the SMP hostname
+   * This is a lightweight operation that doesn't make any HTTP calls
+   *
+   * @param participantId - Full participant ID (e.g., "0208:0837977428")
+   * @returns SMP URL and hostname, or null if not registered
+   */
+  async lookupSMP(participantId: string): Promise<{
+    participantId: string;
+    hash: string;
+    smpUrl: string | null;
+    smpHostname: string | null;
+  }> {
+    // Parse participant ID
+    const [scheme, value] = participantId.split(':');
+    if (!scheme || !value) {
+      throw new Error('Invalid participant ID format. Expected: scheme:value');
+    }
+
+    // Hash participant ID with scheme for canonical form
+    const hash = hashParticipantId(value, scheme);
+
+    // DNS lookup only - no HTTP calls
+    const smpUrl = await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain);
+
+    return {
+      participantId,
+      hash,
+      smpUrl,
+      smpHostname: smpUrl ? new URL(smpUrl).hostname : null
+    };
+  }
+
+  /**
    * Core resolution method
    */
   async resolve(participantId: string, options?: ResolveOptions): Promise<ParticipantInfo> {
