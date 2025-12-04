@@ -118,29 +118,10 @@ export interface ParticipantInfo {
   };
 }
 
-export interface BatchResult {
-  participantId: string;
-  companyName?: string;
-  success: boolean;
-  smpHostname?: string;
-  as4EndpointUrl?: string;
-  technicalContactUrl?: string;
-  technicalInfoUrl?: string;
-  serviceDescription?: string;
-  errorMessage?: string;
-  processedAt: Date;
-}
-
 export interface ResolveOptions {
   fetchDocumentTypes?: boolean;
   verifySignatures?: boolean;
   includeBusinessCard?: boolean;
-  timeout?: number;
-}
-
-export interface BatchOptions {
-  concurrency?: number;
-  onProgress?: (completed: number, total: number) => void;
   timeout?: number;
 }
 

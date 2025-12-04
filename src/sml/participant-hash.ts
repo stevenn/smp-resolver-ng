@@ -84,38 +84,22 @@ export function validateParticipantId(scheme: string, value: string): boolean {
 }
 
 /**
- * Normalizes Belgian participant identifiers
- * @param identifier Raw identifier (could be VAT or KBO)
- * @returns Object with both KBO and VAT participant IDs
+ * Parses a fully-formed participant ID into scheme and value components
+ * @param participantId Full participant ID in format "scheme:value" (e.g., "0208:0843766574")
+ * @returns Object with scheme and value, or null if invalid format
  */
-export function normalizeBelgianIdentifier(identifier: string): {
-  kboParticipantId?: string;
-  vatParticipantId?: string;
-  normalizedValue: string;
-} {
-  // Remove all non-digits
-  const digits = identifier.replace(/\D/g, '');
-
-  // Handle VAT format (BE prefix)
-  if (identifier.toUpperCase().startsWith('BE') && digits.length === 10) {
-    return {
-      kboParticipantId: `0208:${digits}`,
-      vatParticipantId: `9925:BE${digits}`,
-      normalizedValue: digits
-    };
+export function parseParticipantId(participantId: string): { scheme: string; value: string } | null {
+  const colonIndex = participantId.indexOf(':');
+  if (colonIndex === -1) {
+    return null;
   }
 
-  // Handle 10-digit format (could be either)
-  if (digits.length === 10) {
-    return {
-      kboParticipantId: `0208:${digits}`,
-      vatParticipantId: `9925:BE${digits}`,
-      normalizedValue: digits
-    };
+  const scheme = participantId.substring(0, colonIndex);
+  const value = participantId.substring(colonIndex + 1);
+
+  if (!scheme || !value) {
+    return null;
   }
 
-  // Invalid format
-  return {
-    normalizedValue: digits
-  };
+  return { scheme, value };
 }

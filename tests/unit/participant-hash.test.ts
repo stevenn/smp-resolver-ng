@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   hashParticipantId,
   validateParticipantId,
-  normalizeBelgianIdentifier
+  parseParticipantId
 } from '../../src/sml/participant-hash.js';
 
 describe('hashParticipantId', () => {
@@ -48,37 +48,39 @@ describe('validateParticipantId', () => {
   });
 });
 
-describe('normalizeBelgianIdentifier', () => {
-  it('should normalize KBO numbers', () => {
-    const result = normalizeBelgianIdentifier('0843766574');
-    expect(result.kboParticipantId).toBe('0208:0843766574');
-    expect(result.vatParticipantId).toBe('9925:BE0843766574');
+describe('parseParticipantId', () => {
+  it('should parse valid participant IDs', () => {
+    const result = parseParticipantId('0208:0843766574');
+    expect(result).toEqual({ scheme: '0208', value: '0843766574' });
   });
 
-  it('should handle VAT numbers', () => {
-    const result = normalizeBelgianIdentifier('BE0843766574');
-    expect(result.kboParticipantId).toBe('0208:0843766574');
-    expect(result.vatParticipantId).toBe('9925:BE0843766574');
+  it('should parse Belgian VAT format', () => {
+    const result = parseParticipantId('9925:be0843766574');
+    expect(result).toEqual({ scheme: '9925', value: 'be0843766574' });
   });
 
-  it('should handle numbers with dots and spaces', () => {
-    const result = normalizeBelgianIdentifier('0843.766.574');
-    expect(result.kboParticipantId).toBe('0208:0843766574');
-
-    const result2 = normalizeBelgianIdentifier('BE 0843 766 574');
-    expect(result2.kboParticipantId).toBe('0208:0843766574');
+  it('should parse Dutch KvK format', () => {
+    const result = parseParticipantId('0106:12345678');
+    expect(result).toEqual({ scheme: '0106', value: '12345678' });
   });
 
-  it('should handle short numbers', () => {
-    const result = normalizeBelgianIdentifier('843766574');
-    // 9 digits - not valid Belgian format
-    expect(result.kboParticipantId).toBeUndefined();
-    expect(result.vatParticipantId).toBeUndefined();
+  it('should return null for missing colon', () => {
+    const result = parseParticipantId('02080843766574');
+    expect(result).toBeNull();
   });
 
-  it('should handle invalid numbers', () => {
-    const result = normalizeBelgianIdentifier('invalid');
-    expect(result.kboParticipantId).toBeUndefined();
-    expect(result.vatParticipantId).toBeUndefined();
+  it('should return null for empty scheme', () => {
+    const result = parseParticipantId(':0843766574');
+    expect(result).toBeNull();
+  });
+
+  it('should return null for empty value', () => {
+    const result = parseParticipantId('0208:');
+    expect(result).toBeNull();
+  });
+
+  it('should handle values containing colons', () => {
+    const result = parseParticipantId('0208:some:value:with:colons');
+    expect(result).toEqual({ scheme: '0208', value: 'some:value:with:colons' });
   });
 });

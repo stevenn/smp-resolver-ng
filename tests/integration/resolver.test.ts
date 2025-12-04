@@ -140,24 +140,6 @@ describe('SMPResolver Integration Tests', () => {
     });
   });
 
-  describe('resolveParticipant', () => {
-    it('should auto-detect Belgian KBO scheme', async () => {
-      const result = await resolver.resolveParticipant('0843766574');
-
-      expect(result.isRegistered).toBe(true);
-      expect(result.participantId).toBe('0208:0843766574');
-    });
-
-    it('should handle both KBO and VAT schemes', async () => {
-      const result = await resolver.resolveParticipant('BE0843766574');
-
-      // Should try KBO first, succeed, and return with KBO participant ID
-      expect(result.isRegistered).toBe(true);
-      // The participantId in the response is the one that succeeded
-      expect(result.participantId).toBe('0208:0843766574');
-    });
-  });
-
   describe('getBusinessCard', () => {
     it.skip('should fetch business card information', async () => {
       const businessCard = await resolver.getBusinessCard('0208:0843766574');
@@ -190,28 +172,4 @@ describe('SMPResolver Integration Tests', () => {
     });
   });
 
-  describe('resolveBatch', () => {
-    it('should process multiple participants', async () => {
-      const participantIds = ['0208:0843766574', '0208:9999999999'];
-
-      const results = await resolver.resolveBatch(participantIds);
-
-      expect(results).toHaveLength(2);
-      expect(results[0].success).toBe(true);
-      expect(results[0].smpHostname).toBe('smp-test.example.com');
-      expect(results[1].success).toBe(false);
-      expect(results[1].errorMessage).toContain('No SMP found');
-    });
-
-    it('should call progress callback', async () => {
-      const participantIds = ['0208:0843766574', '0208:9999999999'];
-      const progressCallback = vi.fn();
-
-      await resolver.resolveBatch(participantIds, {
-        onProgress: progressCallback
-      });
-
-      expect(progressCallback).toHaveBeenCalledWith(2, 2);
-    });
-  });
 });

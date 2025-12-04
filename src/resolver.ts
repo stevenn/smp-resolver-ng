@@ -2,7 +2,7 @@ import { NAPTRResolver } from './dns/naptr-resolver.js';
 import { HTTPClient } from './http/http-client.js';
 import { RedirectHandler } from './http/redirect-handler.js';
 import { XMLParser } from './xml/parser.js';
-import { hashParticipantId, normalizeBelgianIdentifier } from './sml/participant-hash.js';
+import { hashParticipantId } from './sml/participant-hash.js';
 import { DocumentTypeLookup } from './data/document-types.js';
 import type {
   SMPResolverConfig,
@@ -11,9 +11,7 @@ import type {
   BusinessCard,
   BusinessEntity,
   EndpointInfo,
-  BatchResult,
   ResolveOptions,
-  BatchOptions,
   ServiceMetadata,
   DocumentType
 } from './types/index.js';
@@ -46,45 +44,6 @@ export class SMPResolver {
 
     this.redirectHandler = new RedirectHandler(this.httpClient);
     this.xmlParser = new XMLParser();
-  }
-
-  /**
-   * Resolves a participant with automatic Belgian scheme detection
-   */
-  async resolveParticipant(identifier: string): Promise<ParticipantInfo> {
-    const normalized = normalizeBelgianIdentifier(identifier);
-
-    // Try KBO scheme first
-    if (normalized.kboParticipantId) {
-      try {
-        const result = await this.resolve(normalized.kboParticipantId);
-        if (result.isRegistered) {
-          return result;
-        }
-      } catch {
-        // Continue to VAT scheme
-      }
-    }
-
-    // Try VAT scheme
-    if (normalized.vatParticipantId) {
-      try {
-        const result = await this.resolve(normalized.vatParticipantId);
-        if (result.isRegistered) {
-          return result;
-        }
-      } catch {
-        // Both failed
-      }
-    }
-
-    return {
-      participantId: identifier,
-      isRegistered: false,
-      registrationStatus: 'unregistered',
-      hasActiveEndpoints: false,
-      error: 'Participant not found in any Belgian scheme'
-    };
   }
 
   /**
@@ -341,64 +300,6 @@ export class SMPResolver {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`Failed to get endpoint URLs: ${message}`);
     }
-  }
-
-  /**
-   * Batch processing support
-   */
-  async resolveBatch(participantIds: string[], options?: BatchOptions): Promise<BatchResult[]> {
-    const concurrency = options?.concurrency ?? 20;
-    const results: BatchResult[] = [];
-
-    // Process in chunks
-    for (let i = 0; i < participantIds.length; i += concurrency) {
-      const chunk = participantIds.slice(i, i + concurrency);
-      const chunkPromises = chunk.map(async participantId => {
-        try {
-          // First get endpoint info
-          const info = await this.getEndpointUrls(participantId);
-          
-          // Try to get company name from business card
-          let companyName: string | undefined;
-          try {
-            const businessCard = await this.getBusinessCard(participantId);
-            companyName = businessCard.entity.name;
-          } catch {
-            // Company name is optional, continue without it
-          }
-
-          return {
-            participantId,
-            companyName,
-            success: true,
-            smpHostname: info.smpHostname,
-            as4EndpointUrl: info.endpoint?.url,
-            technicalContactUrl: info.endpoint?.technicalContactUrl,
-            technicalInfoUrl: info.endpoint?.technicalInformationUrl,
-            serviceDescription: info.endpoint?.serviceDescription,
-            processedAt: new Date()
-          };
-        } catch (error: unknown) {
-          const message = error instanceof Error ? error.message : String(error);
-          return {
-            participantId,
-            success: false,
-            errorMessage: message,
-            processedAt: new Date()
-          };
-        }
-      });
-
-      const chunkResults = await Promise.all(chunkPromises);
-      results.push(...chunkResults);
-
-      // Progress callback
-      if (options?.onProgress) {
-        options.onProgress(results.length, participantIds.length);
-      }
-    }
-
-    return results;
   }
 
   /**
