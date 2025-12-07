@@ -215,7 +215,7 @@ export class SMPResolver {
     const businessCard: BusinessCard = {
       entity: businessEntity || {
         name: 'Unknown',
-        countryCode: 'BE',
+        countryCode: '',
         identifiers: [
           {
             scheme: participantId.split(':')[0],
@@ -545,7 +545,7 @@ export class SMPResolver {
 
       // Extract country code
       const countryMatch = xml.match(/<(?:[\w]+:)?CountryCode[^>]*>([^<]+)</);
-      const countryCode = countryMatch ? countryMatch[1].trim() : 'BE';
+      const countryCode = countryMatch ? countryMatch[1].trim() : '';
 
       // Extract identifiers
       const identifiers: Array<{ scheme: string; value: string }> = [];
