@@ -15,3 +15,6 @@ export {
   type ParsedEndpointInfo,
   type ExtendedEndpointResult
 } from './endpoints/classifier.js';
+
+// Certificate parsing
+export { CertificateParser } from './certificate/parser.js';

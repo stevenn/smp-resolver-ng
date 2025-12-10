@@ -4,6 +4,7 @@ import { RedirectHandler } from './http/redirect-handler.js';
 import { XMLParser } from './xml/parser.js';
 import { hashParticipantId } from './sml/participant-hash.js';
 import { DocumentTypeLookup } from './data/document-types.js';
+import { CertificateParser } from './certificate/parser.js';
 import type {
   SMPResolverConfig,
   ParticipantInfo,
@@ -13,7 +14,8 @@ import type {
   EndpointInfo,
   ResolveOptions,
   ServiceMetadata,
-  DocumentType
+  DocumentType,
+  CertificateInfo
 } from './types/index.js';
 
 export class SMPResolver {
@@ -22,6 +24,7 @@ export class SMPResolver {
   private httpClient: HTTPClient;
   private redirectHandler: RedirectHandler;
   private xmlParser: XMLParser;
+  private certificateParser: CertificateParser;
 
   constructor(config: SMPResolverConfig = {}) {
     this.config = {
@@ -44,6 +47,7 @@ export class SMPResolver {
 
     this.redirectHandler = new RedirectHandler(this.httpClient);
     this.xmlParser = new XMLParser();
+    this.certificateParser = new CertificateParser();
   }
 
   /**
@@ -159,6 +163,15 @@ export class SMPResolver {
       // Include endpoint details if verbose mode
       if (options?.fetchDocumentTypes && endpointInfo.endpoint) {
         result.endpoint = endpointInfo.endpoint;
+      }
+
+      // Parse certificate if requested and available
+      if (options?.parseCertificate && endpointInfo.endpoint?.certificate) {
+        try {
+          result.certificateInfo = this.certificateParser.parse(endpointInfo.endpoint.certificate);
+        } catch {
+          // Certificate parsing failed, continue without it
+        }
       }
 
       // Include business entity if requested
@@ -284,7 +297,8 @@ export class SMPResolver {
                     transportProfile: endpoint.transportProfile,
                     technicalContactUrl: endpoint.technicalContactUrl,
                     technicalInformationUrl: endpoint.technicalInformationUrl,
-                    serviceDescription: endpoint.serviceDescription
+                    serviceDescription: endpoint.serviceDescription,
+                    certificate: endpoint.certificate
                   };
                 }
               }
@@ -412,7 +426,8 @@ export class SMPResolver {
                     transportProfile: endpoint.transportProfile,
                     technicalContactUrl: endpoint.technicalContactUrl,
                     technicalInformationUrl: endpoint.technicalInformationUrl,
-                    serviceDescription: endpoint.serviceDescription
+                    serviceDescription: endpoint.serviceDescription,
+                    certificate: endpoint.certificate
                   }
                 };
               }
@@ -628,9 +643,17 @@ export class SMPResolver {
   }
 
   /**
-   * Closes all connections
+   * Closes all connections and clears caches
    */
   async close(): Promise<void> {
     await this.httpClient.close();
+    this.certificateParser.clearCache();
+  }
+
+  /**
+   * Get certificate cache statistics (useful for monitoring bulk processing)
+   */
+  getCertificateCacheStats(): { size: number; fingerprints: string[] } {
+    return this.certificateParser.getCacheStats();
   }
 }

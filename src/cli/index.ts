@@ -8,8 +8,10 @@ import { dirname, join } from 'path';
 
 interface CLIOptions {
   verbose: boolean;
+  verboseExplicit: boolean;  // True only when -v/--verbose explicitly passed
   quiet: boolean;
   businessCard: boolean;
+  certificate: boolean;
   all: boolean;
 }
 
@@ -52,17 +54,22 @@ async function main() {
     process.exit(0);
   }
 
+  const verboseExplicit = args.includes('--verbose') || args.includes('-v');
+
   const options: CLIOptions = {
-    verbose: args.includes('--verbose') || args.includes('-v'),
+    verbose: verboseExplicit,
+    verboseExplicit,
     quiet: args.includes('--quiet') || args.includes('-q'),
     businessCard: args.includes('--business-card') || args.includes('-b'),
+    certificate: args.includes('--certificate') || args.includes('-c'),
     all: args.includes('--all') || args.includes('-a')
   };
 
-  // --all implies both verbose and businessCard
+  // --all implies verbose, businessCard, and certificate
   if (options.all) {
     options.verbose = true;
     options.businessCard = true;
+    options.certificate = true;
   }
 
   // Get participant ID (first non-option argument)
@@ -103,8 +110,9 @@ async function main() {
 async function processSingle(resolver: SMPResolver, participantId: string, options: CLIOptions) {
   // Resolve with appropriate options based on flags
   const result = await resolver.resolve(participantId, {
-    fetchDocumentTypes: options.verbose || options.all,
-    includeBusinessCard: options.businessCard || options.all
+    fetchDocumentTypes: options.verbose || options.certificate || options.all,
+    includeBusinessCard: options.businessCard || options.all,
+    parseCertificate: options.certificate || options.all
   });
 
   if (options.quiet) {
@@ -119,6 +127,27 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
     return;
   }
 
+  // Prepare output - strip raw certificate unless verbose
+  let output: any = { ...result };
+
+  // Remove raw certificate from endpoint unless -v explicitly passed
+  if (!options.verboseExplicit && output.endpoint?.certificate) {
+    output = {
+      ...output,
+      endpoint: { ...output.endpoint }
+    };
+    delete output.endpoint.certificate;
+  }
+
+  // Also strip raw from certificateInfo unless -v explicitly passed
+  if (!options.verboseExplicit && output.certificateInfo?.raw) {
+    output = {
+      ...output,
+      certificateInfo: { ...output.certificateInfo }
+    };
+    delete output.certificateInfo.raw;
+  }
+
   // Add visual indicators for different registration statuses
   if (options.verbose && result.registrationStatus) {
     const statusEmoji = {
@@ -127,29 +156,24 @@ async function processSingle(resolver: SMPResolver, participantId: string, optio
       'unregistered': '❌'
     }[result.registrationStatus];
 
-    const enhancedResult: any = {
-      ...result,
-      _status: `${statusEmoji} ${result.registrationStatus.toUpperCase()}`
-    };
+    output._status = `${statusEmoji} ${result.registrationStatus.toUpperCase()}`;
 
     if (result.registrationStatus === 'parked') {
-      enhancedResult._note = 'This participant is registered but has no active AS4 endpoints configured';
+      output._note = 'This participant is registered but has no active AS4 endpoints configured';
 
       // Add diagnostic information if available
       if (result.diagnostics?.smpErrors && result.diagnostics.smpErrors.length > 0) {
-        enhancedResult._smpErrors = result.diagnostics.smpErrors.map(err => ({
+        output._smpErrors = result.diagnostics.smpErrors.map(err => ({
           url: err.url,
           statusCode: err.statusCode,
           message: err.message
         }));
-        enhancedResult._note += '. See _smpErrors for details on why endpoints could not be retrieved.';
+        output._note += '. See _smpErrors for details on why endpoints could not be retrieved.';
       }
     }
-
-    console.log(JSON.stringify(enhancedResult, null, 2));
-  } else {
-    console.log(JSON.stringify(result, null, 2));
   }
+
+  console.log(JSON.stringify(output, null, 2));
 }
 
 function showHelp() {
@@ -165,7 +189,8 @@ Options:
   -v, --verbose       Show detailed output with document types
   -q, --quiet         Show minimal output (just registered/not registered)
   -b, --business-card Fetch full business card information
-  -a, --all           Fetch all available information (verbose + business card)
+  -c, --certificate   Parse and show X.509 certificate info (SeatID, validity, etc.)
+  -a, --all           Fetch all available information (verbose + business card + certificate)
 
 Participant ID Format:
   The participant ID must include the ICD scheme prefix.
@@ -193,6 +218,9 @@ Examples:
 
   # Fetch business card
   smp-resolve 0208:0843766574 -b
+
+  # Show certificate info (SeatID, validity)
+  smp-resolve 0208:0843766574 -c
 
   # Fetch all information
   smp-resolve 0208:0843766574 --all

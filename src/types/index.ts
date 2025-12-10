@@ -76,6 +76,18 @@ export interface BusinessCard {
   smpHostname: string;
 }
 
+export interface CertificateInfo {
+  fingerprint: string;      // SHA-256 of raw certificate (cache key)
+  subjectDN: string;        // Full subject distinguished name
+  issuerDN: string;         // Full issuer distinguished name
+  serialNumber: string;     // Certificate serial number
+  notBefore: Date;          // Validity start
+  notAfter: Date;           // Validity end
+  seatId?: string;          // Peppol SeatID extracted from CN (e.g., "POP000123")
+  isExpired: boolean;       // Convenience flag for validity check
+  raw: string;              // Original base64/PEM certificate
+}
+
 export interface EndpointInfo {
   smpHostname: string;
   endpoint?: {
@@ -84,6 +96,7 @@ export interface EndpointInfo {
     technicalContactUrl?: string;
     technicalInformationUrl?: string;
     serviceDescription?: string;
+    certificate?: string;           // Raw base64 certificate from SMP
   };
 }
 
@@ -105,7 +118,9 @@ export interface ParticipantInfo {
     serviceDescription?: string;
     technicalContactUrl?: string;
     technicalInformationUrl?: string;
+    certificate?: string;           // Raw base64 certificate from SMP
   };
+  certificateInfo?: CertificateInfo;  // Parsed certificate (when parseCertificate: true)
   businessEntity?: BusinessEntity;
   error?: string;
   diagnostics?: {
@@ -122,6 +137,7 @@ export interface ResolveOptions {
   fetchDocumentTypes?: boolean;
   verifySignatures?: boolean;
   includeBusinessCard?: boolean;
+  parseCertificate?: boolean;     // Parse X.509 certificate and extract SeatID (default: false)
   timeout?: number;
 }
 
