@@ -154,22 +154,6 @@ export class XMLParser {
   }
 
   /**
-   * Parses all Process elements from ServiceMetadata (now uses proper XML parsing)
-   */
-  private parseProcesses(xml: string): Process[] {
-    try {
-      const parsed = this.parser.parse(xml);
-      const serviceInfo = this.findElement(parsed, 'ServiceInformation');
-      if (serviceInfo) {
-        return this.parseProcessesFromParsedXML(serviceInfo);
-      }
-    } catch {
-      // Return empty array if parsing fails
-    }
-    return [];
-  }
-
-  /**
    * Parses all Process elements from parsed ServiceInformation XML
    */
   private parseProcessesFromParsedXML(serviceInfo: any): Process[] {
@@ -206,22 +190,6 @@ export class XMLParser {
     }
 
     return processes;
-  }
-
-  /**
-   * Parses all Endpoint elements from a Process (now uses proper XML parsing)
-   */
-  private parseEndpoints(xml: string): ServiceEndpoint[] {
-    try {
-      const parsed = this.parser.parse(xml);
-      const processElement = this.findElement(parsed, 'Process');
-      if (processElement) {
-        return this.parseEndpointsFromParsedXML(processElement);
-      }
-    } catch {
-      // Return empty array if parsing fails
-    }
-    return [];
   }
 
   /**

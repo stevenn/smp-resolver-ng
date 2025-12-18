@@ -135,7 +135,6 @@ export interface ParticipantInfo {
 
 export interface ResolveOptions {
   fetchDocumentTypes?: boolean;
-  verifySignatures?: boolean;
   includeBusinessCard?: boolean;
   parseCertificate?: boolean;     // Parse X.509 certificate and extract SeatID (default: false)
   timeout?: number;
