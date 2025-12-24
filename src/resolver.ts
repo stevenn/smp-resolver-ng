@@ -32,7 +32,7 @@ export class SMPResolver {
       dnsServers: config.dnsServers ?? [],
       httpTimeout: config.httpTimeout ?? 30000,
       cacheTTL: config.cacheTTL ?? 3600,
-      userAgent: config.userAgent ?? 'smp-resolver-ng/2.2.1'
+      userAgent: config.userAgent ?? 'smp-resolver-ng/2.2.2'
     };
 
     this.naptrResolver = new NAPTRResolver({
@@ -498,6 +498,7 @@ export class SMPResolver {
 
   /**
    * Fetches business card XML from SMP
+   * Prefers HTTPS with a short timeout, falls back to HTTP
    */
   private async fetchBusinessCardXML(
     participantId: string,
@@ -506,43 +507,54 @@ export class SMPResolver {
     const fullIdentifier = `iso6523-actorid-upis::${participantId}`;
     const encodedParticipantId = encodeURIComponent(fullIdentifier);
 
-    // Try different business card URL patterns
-    const urlPatterns = [
-      `${baseUrl}/businesscard/${fullIdentifier}`,
-      `${baseUrl}/${encodedParticipantId}/businesscard`,
-      `${baseUrl}/smp/businesscard/${encodedParticipantId}`,
-      `${baseUrl}/api/businesscard/${encodedParticipantId}`,
-      `${baseUrl}/rest/businesscard/${encodedParticipantId}`
+    // Business card URL patterns to try
+    const patterns = [
+      `/businesscard/${fullIdentifier}`,
+      `/${encodedParticipantId}/businesscard`,
+      `/smp/businesscard/${encodedParticipantId}`,
+      `/api/businesscard/${encodedParticipantId}`,
+      `/rest/businesscard/${encodedParticipantId}`
     ];
 
-    for (const url of urlPatterns) {
+    // Short timeout for business card fetches (optional data, shouldn't block)
+    const BC_TIMEOUT_MS = 3000;
+
+    // Determine HTTP and HTTPS base URLs
+    const httpBase = baseUrl.startsWith('https')
+      ? baseUrl.replace('https://', 'http://')
+      : baseUrl;
+    const httpsBase = baseUrl.startsWith('http://')
+      ? baseUrl.replace('http://', 'https://')
+      : baseUrl;
+
+    // Try HTTPS first with short timeout (preferred for security)
+    for (const pattern of patterns) {
+      const url = httpsBase + pattern;
       try {
-        const response = await this.redirectHandler.followRedirects(url);
+        const response = await this.httpClient.getWithTimeout(url, BC_TIMEOUT_MS);
 
         if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
-          // Parse business card XML
           return this.parseBusinessCardXML(response.body);
         }
+        // Got a response (even if not 200), HTTPS works - continue trying HTTPS patterns
       } catch {
-        // Continue trying other URLs
-        continue;
+        // HTTPS failed (timeout/connection error) - break out and try HTTP
+        break;
       }
     }
 
-    // Also try HTTPS versions if HTTP failed
-    if (!baseUrl.startsWith('https')) {
-      const httpsUrl = baseUrl.replace('http://', 'https://');
-      for (const pattern of urlPatterns) {
-        const url = pattern.replace(baseUrl, httpsUrl);
-        try {
-          const response = await this.redirectHandler.followRedirects(url);
+    // Fall back to HTTP if HTTPS didn't work
+    for (const pattern of patterns) {
+      const url = httpBase + pattern;
+      try {
+        const response = await this.httpClient.getWithTimeout(url, BC_TIMEOUT_MS);
 
-          if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
-            return this.parseBusinessCardXML(response.body);
-          }
-        } catch {
-          continue;
+        if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
+          return this.parseBusinessCardXML(response.body);
         }
+      } catch {
+        // Continue trying other HTTP patterns
+        continue;
       }
     }
 

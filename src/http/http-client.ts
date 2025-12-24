@@ -15,7 +15,7 @@ export class HTTPClient {
 
   constructor(options: HTTPClientOptions = {}) {
     this.timeout = options.timeout ?? 30000;
-    this.userAgent = options.userAgent ?? 'smp-resolver-ng/2.2.1';
+    this.userAgent = options.userAgent ?? 'smp-resolver-ng/2.2.2';
     this.pools = new Map();
 
     this.agent = new Agent({
@@ -84,6 +84,53 @@ export class HTTPClient {
       headers,
       body
     };
+  }
+
+  /**
+   * Performs HTTP GET request with a custom timeout (for optional fetches like business cards)
+   */
+  async getWithTimeout(
+    url: string,
+    timeoutMs: number,
+    additionalHeaders: Record<string, string> = {}
+  ): Promise<{
+    statusCode: number;
+    headers: Record<string, string | string[]>;
+    body: string;
+  }> {
+    const parsed = new URL(url);
+
+    // Create a temporary pool with the custom timeout
+    const tempPool = new Pool(parsed.origin, {
+      connections: 2,
+      pipelining: 1,
+      connect: {
+        timeout: timeoutMs,
+        keepAlive: false
+      }
+    });
+
+    try {
+      const response = await request(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': this.userAgent,
+          Accept: 'application/xml, text/xml',
+          ...additionalHeaders
+        },
+        dispatcher: tempPool,
+        bodyTimeout: timeoutMs,
+        headersTimeout: timeoutMs
+      });
+
+      const statusCode = response.statusCode;
+      const headers = response.headers as Record<string, string | string[]>;
+      const body = await response.body.text();
+
+      return { statusCode, headers, body };
+    } finally {
+      await tempPool.close();
+    }
   }
 
   /**

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.2] - 2025-12-24
+
+### Fixed
+- **Major performance fix:** Business card fetch now completes in ~4s instead of ~150s for SMPs without HTTPS support
+- Business card fetching now prefers HTTPS with 3-second timeout, falls back to HTTP
+- Added `getWithTimeout()` method to HTTP client for custom timeout requests
+
 ## [2.2.1] - 2025-12-18
 
 ### Fixed
