@@ -32,7 +32,7 @@ export class SMPResolver {
       dnsServers: config.dnsServers ?? [],
       httpTimeout: config.httpTimeout ?? 30000,
       cacheTTL: config.cacheTTL ?? 3600,
-      userAgent: config.userAgent ?? 'smp-resolver-ng/2.2.2'
+      userAgent: config.userAgent ?? 'smp-resolver-ng/2.2.3'
     };
 
     this.naptrResolver = new NAPTRResolver({

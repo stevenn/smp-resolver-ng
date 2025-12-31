@@ -15,7 +15,7 @@ export class HTTPClient {
 
   constructor(options: HTTPClientOptions = {}) {
     this.timeout = options.timeout ?? 30000;
-    this.userAgent = options.userAgent ?? 'smp-resolver-ng/2.2.2';
+    this.userAgent = options.userAgent ?? 'smp-resolver-ng/2.2.3';
     this.pools = new Map();
 
     this.agent = new Agent({
@@ -48,7 +48,7 @@ export class HTTPClient {
   }
 
   /**
-   * Performs HTTP GET request with connection pooling
+   * Performs HTTP GET request with connection pooling and retry on connection errors
    */
   async get(
     url: string,
@@ -61,29 +61,74 @@ export class HTTPClient {
     const parsed = new URL(url);
     const pool = this.getPool(parsed.origin);
 
-    const response = await request(url, {
-      method: 'GET',
-      headers: {
-        'User-Agent': this.userAgent,
-        Accept: 'application/xml, text/xml',
-        ...additionalHeaders
-      },
-      dispatcher: pool,
-      bodyTimeout: this.timeout,
-      headersTimeout: this.timeout
-    });
+    // Try with pooled connection first
+    try {
+      const response = await request(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': this.userAgent,
+          Accept: 'application/xml, text/xml',
+          ...additionalHeaders
+        },
+        dispatcher: pool,
+        bodyTimeout: this.timeout,
+        headersTimeout: this.timeout
+      });
 
-    const statusCode = response.statusCode;
-    const headers = response.headers as Record<string, string | string[]>;
+      const statusCode = response.statusCode;
+      const headers = response.headers as Record<string, string | string[]>;
 
-    // Read body as text
-    const body = await response.body.text();
+      // Read body as text
+      const body = await response.body.text();
 
-    return {
-      statusCode,
-      headers,
-      body
-    };
+      return {
+        statusCode,
+        headers,
+        body
+      };
+    } catch (error) {
+      // Retry with fresh connection on "other side closed" or similar connection errors
+      // These happen when servers don't properly support HTTP pipelining
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (
+        errorMessage.includes('other side closed') ||
+        errorMessage.includes('ECONNRESET') ||
+        errorMessage.includes('socket hang up')
+      ) {
+        // Create a fresh connection without pipelining
+        const freshPool = new Pool(parsed.origin, {
+          connections: 1,
+          pipelining: 1,
+          connect: {
+            timeout: this.timeout,
+            keepAlive: false
+          }
+        });
+
+        try {
+          const response = await request(url, {
+            method: 'GET',
+            headers: {
+              'User-Agent': this.userAgent,
+              Accept: 'application/xml, text/xml',
+              ...additionalHeaders
+            },
+            dispatcher: freshPool,
+            bodyTimeout: this.timeout,
+            headersTimeout: this.timeout
+          });
+
+          const statusCode = response.statusCode;
+          const headers = response.headers as Record<string, string | string[]>;
+          const body = await response.body.text();
+
+          return { statusCode, headers, body };
+        } finally {
+          await freshPool.close();
+        }
+      }
+      throw error;
+    }
   }
 
   /**
