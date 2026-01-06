@@ -427,7 +427,9 @@ export class SMPResolver {
                     technicalContactUrl: endpoint.technicalContactUrl,
                     technicalInformationUrl: endpoint.technicalInformationUrl,
                     serviceDescription: endpoint.serviceDescription,
-                    certificate: endpoint.certificate
+                    certificate: endpoint.certificate,
+                    serviceActivationDate: endpoint.serviceActivationDate,
+                    serviceExpirationDate: endpoint.serviceExpirationDate
                   }
                 };
               }
@@ -521,8 +523,8 @@ export class SMPResolver {
       `/rest/businesscard/${encodedParticipantId}`
     ];
 
-    // Aggressive timeout for business card fetches - this is optional data
-    const BC_TIMEOUT_MS = 1500;
+    // Timeout for business card fetches - give slower SMPs enough time
+    const BC_TIMEOUT_MS = 5000;
 
     // Determine HTTP and HTTPS base URLs
     const httpBase = baseUrl.startsWith('https')

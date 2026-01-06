@@ -97,6 +97,8 @@ export interface EndpointInfo {
     technicalInformationUrl?: string;
     serviceDescription?: string;
     certificate?: string;           // Raw base64 certificate from SMP
+    serviceActivationDate?: Date;   // When endpoint was activated
+    serviceExpirationDate?: Date;   // When endpoint expires
   };
 }
 
@@ -119,6 +121,8 @@ export interface ParticipantInfo {
     technicalContactUrl?: string;
     technicalInformationUrl?: string;
     certificate?: string;           // Raw base64 certificate from SMP
+    serviceActivationDate?: Date;   // When endpoint was activated
+    serviceExpirationDate?: Date;   // When endpoint expires
   };
   certificateInfo?: CertificateInfo;  // Parsed certificate (when parseCertificate: true)
   businessEntity?: BusinessEntity;

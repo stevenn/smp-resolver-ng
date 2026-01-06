@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.9] - 2026-01-06
+
+### Added
+- Export `VERSION` constant for consumers to display library version dynamically
+
+## [2.2.8] - 2026-01-06
+
+### Fixed
+- Increased business card fetch timeout to 5000ms for consistent results
+- Fixes business card retrieval for slower SMPs (e.g., smp.b2brouter.com)
+
+## [2.2.7] - 2026-01-06
+
+### Fixed
+- Increased business card fetch timeout from 1500ms to 2500ms (insufficient)
+
+## [2.2.6] - 2026-01-06
+
+### Added
+- Expose `serviceActivationDate` and `serviceExpirationDate` in `ParticipantInfo.endpoint`
+- These dates help troubleshoot endpoint validity issues (not yet active or expired)
+
 ## [2.2.5] - 2026-01-06
 
 ### Fixed
