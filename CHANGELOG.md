@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.5] - 2026-01-06
+
+### Fixed
+- **Business card logic cleanup:** Restored all 5 URL patterns and fixed HTTP fallback
+- HTTPS patterns tried first with early exit on timeout (skip remaining HTTPS)
+- HTTP always tried as fallback (some SMPs only serve BC on HTTP)
+- First HTTP timeout bails out entirely (fail fast)
+- Worst case: ~2s for SMPs without business cards (was 18s before v2.2.4)
+
 ## [2.2.4] - 2026-01-06
 
 ### Fixed

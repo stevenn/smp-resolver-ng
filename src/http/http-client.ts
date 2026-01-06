@@ -15,7 +15,7 @@ export class HTTPClient {
 
   constructor(options: HTTPClientOptions = {}) {
     this.timeout = options.timeout ?? 30000;
-    this.userAgent = options.userAgent ?? 'smp-resolver-ng/2.2.4';
+    this.userAgent = options.userAgent ?? 'smp-resolver-ng/2.2.5';
     this.pools = new Map();
 
     this.agent = new Agent({

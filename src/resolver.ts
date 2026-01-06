@@ -32,7 +32,7 @@ export class SMPResolver {
       dnsServers: config.dnsServers ?? [],
       httpTimeout: config.httpTimeout ?? 30000,
       cacheTTL: config.cacheTTL ?? 3600,
-      userAgent: config.userAgent ?? 'smp-resolver-ng/2.2.4'
+      userAgent: config.userAgent ?? 'smp-resolver-ng/2.2.5'
     };
 
     this.naptrResolver = new NAPTRResolver({
@@ -498,7 +498,12 @@ export class SMPResolver {
 
   /**
    * Fetches business card XML from SMP
-   * Uses aggressive timeouts and early exit to avoid blocking lookups
+   *
+   * Strategy:
+   * 1. Try HTTPS first (preferred for security) with aggressive timeout
+   * 2. On first timeout/connection error, skip remaining HTTPS patterns
+   * 3. Always try HTTP as fallback (some SMPs only serve BC on HTTP)
+   * 4. On first HTTP timeout, give up entirely
    */
   private async fetchBusinessCardXML(
     participantId: string,
@@ -510,7 +515,10 @@ export class SMPResolver {
     // Business card URL patterns to try (most common first)
     const patterns = [
       `/businesscard/${fullIdentifier}`,
-      `/${encodedParticipantId}/businesscard`
+      `/${encodedParticipantId}/businesscard`,
+      `/smp/businesscard/${encodedParticipantId}`,
+      `/api/businesscard/${encodedParticipantId}`,
+      `/rest/businesscard/${encodedParticipantId}`
     ];
 
     // Aggressive timeout for business card fetches - this is optional data
@@ -524,12 +532,10 @@ export class SMPResolver {
       ? baseUrl.replace('http://', 'https://')
       : baseUrl;
 
-    // Track if we've had any timeout - if so, server likely doesn't support BC
-    let hadTimeout = false;
-
     // Try HTTPS first with short timeout (preferred for security)
+    let httpsTimedOut = false;
     for (const pattern of patterns) {
-      if (hadTimeout) break;
+      if (httpsTimedOut) break;
       const url = httpsBase + pattern;
       try {
         const response = await this.httpClient.getWithTimeout(url, BC_TIMEOUT_MS);
@@ -537,28 +543,26 @@ export class SMPResolver {
         if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
           return this.parseBusinessCardXML(response.body);
         }
-        // Got 404 or other error - server responds but no BC at this pattern
+        // Got 404 or other response - server responds, continue trying patterns
       } catch {
-        // HTTPS failed (timeout/connection error) - mark and try HTTP
-        hadTimeout = true;
-        break;
+        // HTTPS timeout/connection error - skip remaining HTTPS patterns
+        httpsTimedOut = true;
       }
     }
 
-    // Fall back to HTTP only if HTTPS had connection issues (not just 404s)
-    if (hadTimeout) {
-      for (const pattern of patterns) {
-        const url = httpBase + pattern;
-        try {
-          const response = await this.httpClient.getWithTimeout(url, BC_TIMEOUT_MS);
+    // Always try HTTP as fallback (some SMPs only serve BC on HTTP)
+    for (const pattern of patterns) {
+      const url = httpBase + pattern;
+      try {
+        const response = await this.httpClient.getWithTimeout(url, BC_TIMEOUT_MS);
 
-          if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
-            return this.parseBusinessCardXML(response.body);
-          }
-        } catch {
-          // Timeout on HTTP too - server doesn't support business cards, bail out
-          break;
+        if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
+          return this.parseBusinessCardXML(response.body);
         }
+        // Got 404 or other response - continue trying patterns
+      } catch {
+        // HTTP timeout - server doesn't support business cards, bail out
+        break;
       }
     }
 
