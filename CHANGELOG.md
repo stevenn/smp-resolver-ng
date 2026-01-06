@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.4] - 2026-01-06
+
+### Fixed
+- **Critical timeout fix:** Business card fetch for SMPs that don't support business cards now fails fast (~1.5s max) instead of trying all URL patterns (~18s)
+- Reduced business card URL patterns from 5 to 2 (most common patterns only)
+- Reduced per-pattern timeout from 3000ms to 1500ms
+- Added early exit on first timeout - if one pattern times out, subsequent patterns are skipped
+- This fixes timeout issues when using `includeBusinessCard: true` with SMPs like smp.profluo.com
+
 ## [2.2.2] - 2025-12-24
 
 ### Fixed
