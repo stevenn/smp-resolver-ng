@@ -219,10 +219,9 @@ export class SMPResolver {
     }
 
     const smpHostname = new URL(smpUrl).hostname;
-    const baseUrl = `http://${smpHostname}`; // Most SMPs use HTTP
 
-    // Try to fetch business card XML
-    const businessEntity = await this.fetchBusinessCardXML(participantId, baseUrl);
+    // Try to fetch business card XML using full SMP URL (includes path)
+    const businessEntity = await this.fetchBusinessCardXML(participantId, smpUrl);
 
     // Build business card response
     const businessCard: BusinessCard = {
