@@ -93,7 +93,7 @@ async function main() {
   }
 
   const resolver = new SMPResolver({
-    smlDomain: 'edelivery.tech.ec.europa.eu'
+    smlDomain: 'participant.sml.prod.tech.peppol.org'
   });
 
   try {

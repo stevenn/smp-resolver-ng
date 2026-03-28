@@ -138,7 +138,7 @@ export class NAPTRResolver {
   async lookupSMP(
     participantHash: string,
     scheme: string,
-    smlDomain: string = 'edelivery.tech.ec.europa.eu'
+    smlDomain: string = 'participant.sml.prod.tech.peppol.org'
   ): Promise<string | null> {
     // NAPTR format: {hash}.iso6523-actorid-upis.{sml-domain}
     const domain = `${participantHash}.iso6523-actorid-upis.${smlDomain}`;

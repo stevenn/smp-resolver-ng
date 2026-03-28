@@ -28,7 +28,7 @@ export class SMPResolver {
 
   constructor(config: SMPResolverConfig = {}) {
     this.config = {
-      smlDomain: config.smlDomain ?? 'edelivery.tech.ec.europa.eu',
+      smlDomain: config.smlDomain ?? 'participant.sml.prod.tech.peppol.org',
       dnsServers: config.dnsServers ?? [],
       httpTimeout: config.httpTimeout ?? 30000,
       cacheTTL: config.cacheTTL ?? 3600,

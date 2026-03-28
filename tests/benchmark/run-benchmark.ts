@@ -154,7 +154,7 @@ async function runBenchmark(
   config: ReturnType<typeof parseArgs>
 ): Promise<BenchmarkResults> {
   const resolver = new SMPResolver({
-    smlDomain: 'edelivery.tech.ec.europa.eu',
+    smlDomain: 'participant.sml.prod.tech.peppol.org',
     dnsServers: ['1.1.1.1', '1.0.0.1', '8.8.8.8', '8.8.4.4'],
     httpTimeout: config.httpTimeout,
   });

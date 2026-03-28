@@ -211,7 +211,7 @@ Main resolver class with methods:
 
 ```typescript
 interface SMPResolverConfig {
-  smlDomain?: string;      // Default: 'edelivery.tech.ec.europa.eu'
+  smlDomain?: string;      // Default: 'participant.sml.prod.tech.peppol.org'
   dnsServers?: string[];   // Custom DNS servers (optional)
   httpTimeout?: number;    // HTTP timeout in ms (default: 30000)
   cacheTTL?: number;       // Cache TTL in seconds (default: 3600)
@@ -249,7 +249,7 @@ Low-level DNS resolver for direct SML queries:
 import { NAPTRResolver } from '@stevenn/smp-resolver-ng';
 
 const resolver = new NAPTRResolver({ timeout: 5000 });
-const records = await resolver.resolveNAPTR('hash.iso6523-actorid-upis.edelivery.tech.ec.europa.eu');
+const records = await resolver.resolveNAPTR('hash.iso6523-actorid-upis.participant.sml.prod.tech.peppol.org');
 const smpUrl = resolver.extractSMPUrl(records);
 ```
 
