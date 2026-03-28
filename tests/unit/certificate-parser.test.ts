@@ -133,11 +133,11 @@ SGVsbG8gV29ybGQ=
     it('should correctly determine certificate validity', () => {
       const info = parser.parse(REAL_PEPPOL_CERTIFICATE);
 
-      // Certificate is valid until 2026-02-15
+      // Certificate was valid from 2024-02-26 to 2026-02-15
       expect(info.notBefore).toEqual(new Date('2024-02-26T00:00:00.000Z'));
       expect(info.notAfter).toEqual(new Date('2026-02-15T23:59:59.000Z'));
-      // As of now (2024-2025), should not be expired
-      expect(info.isExpired).toBe(false);
+      // Certificate expired on 2026-02-15
+      expect(info.isExpired).toBe(true);
     });
 
     it('should cache parsed certificates by fingerprint', () => {
