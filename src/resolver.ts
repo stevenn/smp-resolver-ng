@@ -5,6 +5,7 @@ import { XMLParser } from './xml/parser.js';
 import { hashParticipantId } from './sml/participant-hash.js';
 import { DocumentTypeLookup } from './data/document-types.js';
 import { CertificateParser } from './certificate/parser.js';
+import { VERSION } from './index.js';
 import type {
   SMPResolverConfig,
   ParticipantInfo,
@@ -32,7 +33,7 @@ export class SMPResolver {
       dnsServers: config.dnsServers ?? [],
       httpTimeout: config.httpTimeout ?? 30000,
       cacheTTL: config.cacheTTL ?? 3600,
-      userAgent: config.userAgent ?? 'smp-resolver-ng/2.3.1'
+      userAgent: config.userAgent ?? `smp-resolver-ng/${VERSION}`
     };
 
     this.naptrResolver = new NAPTRResolver({

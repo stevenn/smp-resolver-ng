@@ -2,8 +2,9 @@ export { SMPResolver } from './resolver.js';
 export * from './types/index.js';
 export { NAPTRResolver } from './dns/naptr-resolver.js';
 
-// Library version (keep in sync with package.json)
-export const VERSION = '2.3.1';
+// Library version — derived from package.json (single source of truth)
+import pkg from '../package.json' with { type: 'json' };
+export const VERSION = pkg.version;
 
 // Re-export utility functions
 export {
