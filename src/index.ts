@@ -3,7 +3,7 @@ export * from './types/index.js';
 export { NAPTRResolver } from './dns/naptr-resolver.js';
 
 // Library version (keep in sync with package.json)
-export const VERSION = '2.2.9';
+export const VERSION = '2.3.1';
 
 // Re-export utility functions
 export {
