@@ -546,9 +546,13 @@ export class SMPResolver {
           return this.parseBusinessCardXML(response.body);
         }
         // Got 404 or other response - server responds, continue trying patterns
-      } catch {
-        // HTTPS timeout/connection error - skip remaining HTTPS patterns
-        httpsTimedOut = true;
+      } catch (error) {
+        // Only an unresponsive origin justifies abandoning the remaining patterns.
+        // A dropped socket is transient and pattern-independent, so keep probing -
+        // treating it as fatal is what made business cards disappear at random.
+        if (HTTPClient.isTimeoutError(error)) {
+          httpsTimedOut = true;
+        }
       }
     }
 
@@ -562,9 +566,11 @@ export class SMPResolver {
           return this.parseBusinessCardXML(response.body);
         }
         // Got 404 or other response - continue trying patterns
-      } catch {
-        // HTTP timeout - server doesn't support business cards, bail out
-        break;
+      } catch (error) {
+        // As above: give up only when the origin stopped answering
+        if (HTTPClient.isTimeoutError(error)) {
+          break;
+        }
       }
     }
 

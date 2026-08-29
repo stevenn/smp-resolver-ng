@@ -132,7 +132,7 @@ export class NAPTRResolver {
    * Performs complete SML lookup for a participant
    * @param participantHash Base32 encoded hash of participant ID
    * @param scheme Participant scheme (e.g., "0208", "9925")
-   * @param smlDomain SML domain (default: edelivery.tech.ec.europa.eu)
+   * @param smlDomain SML domain (default: participant.sml.prod.tech.peppol.org)
    * @returns SMP base URL or null if not found
    */
   async lookupSMP(

@@ -48,6 +48,34 @@ export class HTTPClient {
   }
 
   /**
+   * Connection-level errors that a retry on a fresh connection can recover from.
+   * These happen when a server closes a pooled/keep-alive socket mid-flight, and
+   * say nothing about whether the resource exists.
+   */
+  static isTransientConnectionError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      message.includes('other side closed') ||
+      message.includes('ECONNRESET') ||
+      message.includes('socket hang up')
+    );
+  }
+
+  /**
+   * True when a request gave up waiting rather than being refused or dropped.
+   * A timeout suggests the origin is unresponsive, so callers probing several
+   * URLs are right to stop; other failures say nothing about the next URL.
+   */
+  static isTimeoutError(error: unknown): boolean {
+    const code = (error as { code?: string } | null)?.code ?? '';
+    if (code.startsWith('UND_ERR_') && code.includes('TIMEOUT')) {
+      return true;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return message.toLowerCase().includes('timeout');
+  }
+
+  /**
    * Performs HTTP GET request with connection pooling and retry on connection errors
    */
   async get(
@@ -89,12 +117,7 @@ export class HTTPClient {
     } catch (error) {
       // Retry with fresh connection on "other side closed" or similar connection errors
       // These happen when servers don't properly support HTTP pipelining
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (
-        errorMessage.includes('other side closed') ||
-        errorMessage.includes('ECONNRESET') ||
-        errorMessage.includes('socket hang up')
-      ) {
+      if (HTTPClient.isTransientConnectionError(error)) {
         // Create a fresh connection without pipelining
         const freshPool = new Pool(parsed.origin, {
           connections: 1,
@@ -145,36 +168,50 @@ export class HTTPClient {
   }> {
     const parsed = new URL(url);
 
-    // Create a temporary pool with the custom timeout
-    const tempPool = new Pool(parsed.origin, {
-      connections: 2,
-      pipelining: 1,
-      connect: {
-        timeout: timeoutMs,
-        keepAlive: false
-      }
-    });
-
-    try {
-      const response = await request(url, {
-        method: 'GET',
-        headers: {
-          'User-Agent': this.userAgent,
-          Accept: 'application/xml, text/xml',
-          ...additionalHeaders
-        },
-        dispatcher: tempPool,
-        bodyTimeout: timeoutMs,
-        headersTimeout: timeoutMs
+    const fetchOnce = async (connections: number) => {
+      // Create a temporary pool with the custom timeout
+      const tempPool = new Pool(parsed.origin, {
+        connections,
+        pipelining: 1,
+        connect: {
+          timeout: timeoutMs,
+          keepAlive: false
+        }
       });
 
-      const statusCode = response.statusCode;
-      const headers = response.headers as Record<string, string | string[]>;
-      const body = await response.body.text();
+      try {
+        const response = await request(url, {
+          method: 'GET',
+          headers: {
+            'User-Agent': this.userAgent,
+            Accept: 'application/xml, text/xml',
+            ...additionalHeaders
+          },
+          dispatcher: tempPool,
+          bodyTimeout: timeoutMs,
+          headersTimeout: timeoutMs
+        });
 
-      return { statusCode, headers, body };
-    } finally {
-      await tempPool.close();
+        const statusCode = response.statusCode;
+        const headers = response.headers as Record<string, string | string[]>;
+        const body = await response.body.text();
+
+        return { statusCode, headers, body };
+      } finally {
+        await tempPool.close();
+      }
+    };
+
+    try {
+      return await fetchOnce(2);
+    } catch (error) {
+      // A dropped socket says nothing about whether the resource exists, so retry
+      // once on a fresh single connection before reporting failure. Without this,
+      // optional fetches (business cards) silently vanish on a transient blip.
+      if (HTTPClient.isTransientConnectionError(error)) {
+        return await fetchOnce(1);
+      }
+      throw error;
     }
   }
 
