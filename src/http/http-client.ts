@@ -1,5 +1,8 @@
 import { Agent, request, Pool } from 'undici';
 
+// Fallback User-Agent version — derived from package.json (single source of truth)
+import pkg from '../../package.json' with { type: 'json' };
+
 export interface HTTPClientOptions {
   timeout?: number;
   userAgent?: string;
@@ -15,7 +18,7 @@ export class HTTPClient {
 
   constructor(options: HTTPClientOptions = {}) {
     this.timeout = options.timeout ?? 30000;
-    this.userAgent = options.userAgent ?? 'smp-resolver-ng/2.2.9';
+    this.userAgent = options.userAgent ?? `smp-resolver-ng/${pkg.version}`;
     this.pools = new Map();
 
     this.agent = new Agent({
