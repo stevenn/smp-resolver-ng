@@ -11,6 +11,7 @@ import type {
   ParticipantInfo,
   RegistrationStatus,
   BusinessCard,
+  BusinessCardAttempt,
   BusinessEntity,
   EndpointInfo,
   ResolveOptions,
@@ -175,19 +176,39 @@ export class SMPResolver {
         }
       }
 
-      // Include business entity if requested
-      if (options?.includeBusinessCard) {
-        try {
-          const businessCard = await this.getBusinessCard(participantId, options);
-          result.businessEntity = businessCard.entity;
-        } catch {
-          // Business card is optional, continue without it
-        }
-      }
-
       // Include diagnostics if available
       if (endpointInfo.diagnostics) {
         result.diagnostics = endpointInfo.diagnostics;
+      }
+
+      // Include business entity if requested
+      if (options?.includeBusinessCard) {
+        const attempts: BusinessCardAttempt[] = [];
+        try {
+          // Reuse the SMP URL already resolved above rather than repeating the
+          // NAPTR lookup: a second DNS query is one more chance to fail, and its
+          // failure would discard a business card the SMP was serving happily.
+          const businessCard = await this.getBusinessCard(
+            participantId,
+            options,
+            smpUrl,
+            attempts
+          );
+          result.businessEntity = businessCard.entity;
+        } catch (error: unknown) {
+          // Business card is optional, continue without it - but say why
+          attempts.push({
+            url: smpUrl,
+            ms: 0,
+            error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+            outcome: 'threw'
+          });
+        }
+
+        // Only report attempts when no card was obtained; a clean fetch is silent
+        if (!result.businessEntity?.name || result.businessEntity.name === 'Unknown') {
+          result.diagnostics = { ...result.diagnostics, businessCardAttempts: attempts };
+        }
       }
 
       return result;
@@ -205,15 +226,24 @@ export class SMPResolver {
   /**
    * Gets business card information (peppolcheck compatibility)
    */
-  async getBusinessCard(participantId: string, _options?: ResolveOptions): Promise<BusinessCard> {
-    // Get SMP URL via DNS
+  async getBusinessCard(
+    participantId: string,
+    _options?: ResolveOptions,
+    knownSmpUrl?: string,
+    attempts?: BusinessCardAttempt[]
+  ): Promise<BusinessCard> {
     const [scheme, value] = participantId.split(':');
     if (!scheme || !value) {
       throw new Error('Invalid participant ID format');
     }
 
-    const hash = hashParticipantId(value, scheme);
-    const smpUrl = await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain);
+    // Resolve the SMP only when the caller has not already done so
+    let smpUrl = knownSmpUrl;
+    if (!smpUrl) {
+      const hash = hashParticipantId(value, scheme);
+      smpUrl =
+        (await this.naptrResolver.lookupSMP(hash, scheme, this.config.smlDomain)) ?? undefined;
+    }
 
     if (!smpUrl) {
       throw new Error('Participant not registered');
@@ -222,7 +252,7 @@ export class SMPResolver {
     const smpHostname = new URL(smpUrl).hostname;
 
     // Try to fetch business card XML using full SMP URL (includes path)
-    const businessEntity = await this.fetchBusinessCardXML(participantId, smpUrl);
+    const businessEntity = await this.fetchBusinessCardXML(participantId, smpUrl, attempts);
 
     // Build business card response
     const businessCard: BusinessCard = {
@@ -509,7 +539,8 @@ export class SMPResolver {
    */
   private async fetchBusinessCardXML(
     participantId: string,
-    baseUrl: string
+    baseUrl: string,
+    attempts?: BusinessCardAttempt[]
   ): Promise<BusinessEntity | null> {
     const fullIdentifier = `iso6523-actorid-upis::${participantId}`;
     const encodedParticipantId = encodeURIComponent(fullIdentifier);
@@ -534,44 +565,60 @@ export class SMPResolver {
       ? baseUrl.replace('http://', 'https://')
       : baseUrl;
 
-    // Try HTTPS first with short timeout (preferred for security)
-    let httpsTimedOut = false;
-    for (const pattern of patterns) {
-      if (httpsTimedOut) break;
-      const url = httpsBase + pattern;
+    // Record what each URL actually returned, so a card that goes missing
+    // leaves evidence instead of an indistinguishable null
+    const record = (a: BusinessCardAttempt) => attempts?.push(a);
+
+    const tryUrl = async (
+      url: string
+    ): Promise<{ entity: BusinessEntity | null; timedOut: boolean }> => {
+      const started = Date.now();
       try {
         const response = await this.httpClient.getWithTimeout(url, BC_TIMEOUT_MS);
+        const body = response.body.trim();
+        const ms = Date.now() - started;
 
-        if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
-          return this.parseBusinessCardXML(response.body);
+        if (response.statusCode === 200 && body.startsWith('<')) {
+          record({ url, ms, statusCode: response.statusCode, outcome: 'parsed' });
+          return { entity: this.parseBusinessCardXML(response.body), timedOut: false };
         }
-        // Got 404 or other response - server responds, continue trying patterns
+
+        // Server responded, but not with a card - keep the shape of what it said
+        record({
+          url,
+          ms,
+          statusCode: response.statusCode,
+          bodyPrefix: body.slice(0, 80),
+          outcome: response.statusCode === 200 ? 'not-xml' : 'non-200'
+        });
+        return { entity: null, timedOut: false };
       } catch (error) {
-        // Only an unresponsive origin justifies abandoning the remaining patterns.
-        // A dropped socket is transient and pattern-independent, so keep probing -
-        // treating it as fatal is what made business cards disappear at random.
-        if (HTTPClient.isTimeoutError(error)) {
-          httpsTimedOut = true;
-        }
+        const timedOut = HTTPClient.isTimeoutError(error);
+        record({
+          url,
+          ms: Date.now() - started,
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          outcome: 'threw'
+        });
+        return { entity: null, timedOut };
       }
+    };
+
+    // Try HTTPS first with short timeout (preferred for security)
+    for (const pattern of patterns) {
+      const { entity, timedOut } = await tryUrl(httpsBase + pattern);
+      if (entity) return entity;
+      // Only an unresponsive origin justifies abandoning the remaining patterns.
+      // A dropped socket is transient and pattern-independent, so keep probing -
+      // treating it as fatal is what made business cards disappear at random.
+      if (timedOut) break;
     }
 
     // Always try HTTP as fallback (some SMPs only serve BC on HTTP)
     for (const pattern of patterns) {
-      const url = httpBase + pattern;
-      try {
-        const response = await this.httpClient.getWithTimeout(url, BC_TIMEOUT_MS);
-
-        if (response.statusCode === 200 && response.body.trim().startsWith('<')) {
-          return this.parseBusinessCardXML(response.body);
-        }
-        // Got 404 or other response - continue trying patterns
-      } catch (error) {
-        // As above: give up only when the origin stopped answering
-        if (HTTPClient.isTimeoutError(error)) {
-          break;
-        }
-      }
+      const { entity, timedOut } = await tryUrl(httpBase + pattern);
+      if (entity) return entity;
+      if (timedOut) break;
     }
 
     return null;

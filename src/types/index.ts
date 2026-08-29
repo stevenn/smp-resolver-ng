@@ -134,7 +134,30 @@ export interface ParticipantInfo {
       message: string;
     }>;
     warnings?: string[];
+    /**
+     * One entry per business card URL attempted, in order, recorded whenever
+     * the card could not be retrieved. A card that fetches cleanly records
+     * nothing. Present only when includeBusinessCard was requested.
+     */
+    businessCardAttempts?: BusinessCardAttempt[];
   };
+}
+
+/**
+ * The outcome of a single business card fetch attempt. Failures are otherwise
+ * indistinguishable from "this SMP publishes no business card", which makes
+ * intermittent losses impossible to diagnose from the outside.
+ */
+export interface BusinessCardAttempt {
+  url: string;
+  ms: number;
+  statusCode?: number;
+  /** First 80 characters of the body, when a response arrived */
+  bodyPrefix?: string;
+  /** Error class and message, when the request threw */
+  error?: string;
+  /** Why this attempt did not yield a card */
+  outcome: 'parsed' | 'non-200' | 'not-xml' | 'threw';
 }
 
 export interface ResolveOptions {
